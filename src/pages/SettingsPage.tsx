@@ -1,5 +1,7 @@
-import { ArrowLeft, Dog, Users, Activity, Syringe, Plus, X, LogOut, Shield, RefreshCw, WifiOff } from "lucide-react";
+import { ArrowLeft, Dog, Users, Activity, Syringe, Plus, X, LogOut, Shield, RefreshCw, WifiOff, HelpCircle, Play, BellRing } from "lucide-react";
 import { useAppStore } from "../stores/appStore";
+import { Capacitor } from "@capacitor/core";
+import { LocalNotifications } from "@capacitor/local-notifications";
 import { getInsulinLabel } from "../types/insulin";
 import { useState } from "react";
 
@@ -32,6 +34,7 @@ export default function SettingsPage({ onBack }: Props) {
   const logout = useAppStore((s: any) => s.logout);
   const addToast = useAppStore((s: any) => s.addToast);
   const hasToken = useAppStore((s: any) => s.hasToken);
+  const resetOnboarding = useAppStore((s) => s.resetOnboarding);
 
   const [newType, setNewType] = useState("");
   const [newName, setNewName] = useState("");
@@ -185,6 +188,106 @@ export default function SettingsPage({ onBack }: Props) {
     setCurrentPass("");
     setNewPassUser("");
     setConfirmPass("");
+  };
+
+  const handleTestImmediateNotification = async () => {
+    const title = "🚨 Prueba de Alerta Crítica";
+    const body = "Esto es una simulación de glucosa fuera de rango. ¡El sistema de sonido y vibración funciona!";
+    
+    const appState = useAppStore.getState();
+    if (appState.notificationPermission !== "granted") {
+      addToast({ message: "Permiso de notificaciones no concedido. Actívalo en el inicio.", type: "warning" });
+      return;
+    }
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        await LocalNotifications.createChannel({
+          id: "critical-alerts",
+          name: "Alertas Críticas",
+          description: "Canal para alertas de glucosa alta y baja",
+          importance: 5,
+          vibration: true,
+          visibility: 1,
+        });
+
+        await LocalNotifications.schedule({
+          notifications: [
+            {
+              title,
+              body,
+              id: 99991,
+              channelId: "critical-alerts",
+              schedule: {
+                at: new Date(Date.now() + 500),
+                allowWhileIdle: true,
+              }
+            }
+          ]
+        });
+        addToast({ message: "Alerta nativa inmediata enviada", type: "success" });
+      } catch (e) {
+        console.error(e);
+        addToast({ message: "Error al enviar alerta nativa", type: "error" });
+      }
+    } else if ("Notification" in window) {
+      new Notification(title, { body, icon: "/pwa-192x192.png" });
+      addToast({ message: "Alerta web enviada", type: "success" });
+    } else {
+      addToast({ message: "Notificaciones no soportadas en este navegador", type: "error" });
+    }
+  };
+
+  const handleTestDelayedNotification = async () => {
+    const title = "🔒 Alerta con Pantalla Bloqueada";
+    const body = "¡Funciona! Esta alerta de prueba se programó hace 5 segundos para sonar en segundo plano.";
+    
+    const appState = useAppStore.getState();
+    if (appState.notificationPermission !== "granted") {
+      addToast({ message: "Permiso de notificaciones no concedido. Actívalo en el inicio.", type: "warning" });
+      return;
+    }
+
+    const triggerTime = new Date(Date.now() + 5000);
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        await LocalNotifications.createChannel({
+          id: "critical-alerts",
+          name: "Alertas Críticas",
+          description: "Canal para alertas de glucosa alta y baja",
+          importance: 5,
+          vibration: true,
+          visibility: 1,
+        });
+
+        await LocalNotifications.schedule({
+          notifications: [
+            {
+              title,
+              body,
+              id: 99992,
+              channelId: "critical-alerts",
+              schedule: {
+                at: triggerTime,
+                allowWhileIdle: true,
+              }
+            }
+          ]
+        });
+        addToast({ message: "Alerta programada en 5 seg. ¡Bloquea tu pantalla ahora!", type: "info" });
+      } catch (e) {
+        console.error(e);
+        addToast({ message: "Error al programar alerta", type: "error" });
+      }
+    } else {
+      setTimeout(() => {
+        if ("Notification" in window) {
+          new Notification(title, { body, icon: "/pwa-192x192.png" });
+        }
+      }, 5000);
+      addToast({ message: "Alerta web programada en 5 seg. Deja la pestaña abierta.", type: "info" });
+    }
   };
 
   return (
@@ -565,6 +668,28 @@ export default function SettingsPage({ onBack }: Props) {
           )}
         </div>
 
+        {/* Ayuda y Tutorial */}
+        <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="bg-orange-100 rounded-full p-2">
+              <HelpCircle size={20} className="text-orange-500" />
+            </div>
+            <h3 className="font-semibold text-gray-800">Tutorial de Bienvenida</h3>
+          </div>
+          <p className="text-xs text-gray-500 mb-4">
+            ¿Necesitas ayuda? Haz clic aquí para iniciar el tutorial visual interactivo y recordar dónde está cada funcionalidad de la app.
+          </p>
+          <button
+            onClick={() => {
+              resetOnboarding();
+              addToast({ message: "Tutorial reiniciado. Regresa al inicio para verlo.", type: "success" });
+            }}
+            className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2.5 rounded-lg text-xs transition-colors flex items-center justify-center gap-1.5"
+          >
+            <Play size={14} fill="white" /> Reproducir Tutorial
+          </button>
+        </div>
+
         {currentUser && !isAdmin && (
           <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
             <div className="flex items-center gap-3 mb-3">
@@ -680,6 +805,33 @@ export default function SettingsPage({ onBack }: Props) {
                 {customInsulinTypes.length === 0 && (
                   <p className="text-xs text-gray-400 text-center py-2">No hay tipos personalizados</p>
                 )}
+              </div>
+            </div>
+
+            {/* Pruebas de Notificaciones */}
+            <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="bg-orange-100 rounded-full p-2">
+                  <BellRing size={20} className="text-orange-500" />
+                </div>
+                <h3 className="font-semibold text-gray-800">Prueba de Alertas</h3>
+              </div>
+              <p className="text-xs text-gray-400 mb-4">
+                Usa estos botones para verificar que los sonidos, la vibración y las notificaciones emergentes (incluso con pantalla bloqueada) funcionan correctamente en tu dispositivo.
+              </p>
+              <div className="space-y-2">
+                <button
+                  onClick={handleTestImmediateNotification}
+                  className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <BellRing size={14} /> Alerta Inmediata (Con Sonido)
+                </button>
+                <button
+                  onClick={handleTestDelayedNotification}
+                  className="w-full bg-orange-100 hover:bg-orange-200 text-orange-700 font-semibold py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <Play size={14} fill="orange" /> Alerta Programada (5 seg - para Bloquear Pantalla)
+                </button>
               </div>
             </div>
           </>

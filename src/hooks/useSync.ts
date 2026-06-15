@@ -18,13 +18,12 @@ export function useSync() {
     if (!token) return; // No sincronizar si no está autenticado en el backend
 
     try {
-      // 1. Obtener la ID del primer perro de manera dinámica si no está guardada
-      let petId = currentPetId || localStorage.getItem('active_pet_id');
+      let petId = currentPetId;
       if (!petId) {
         const pets = await apiRequest('/pets');
         if (pets && pets.length > 0) {
           petId = pets[0].id;
-          localStorage.setItem('active_pet_id', petId!);
+          useAppStore.getState().setCurrentPet(pets[0]);
         } else {
           console.warn('No se encontraron mascotas en el servidor.');
           return;
@@ -49,7 +48,8 @@ export function useSync() {
             unit: r.unit || 'mg/dL',
             trend: r.trend,
             isHigh: r.isHigh,
-            isLow: r.isLow
+            isLow: r.isLow,
+            source: r.source
           }));
 
           useRegistryStore.getState().addServerGlucoseReadings(mappedReadings);

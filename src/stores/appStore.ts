@@ -3,6 +3,8 @@ import { persist } from "zustand/middleware";
 import type { Caregiver } from "../types/caregiver";
 import type { SensorStatus } from "../types/sensor";
 import type { DogProfile } from "../types/dog";
+import { Capacitor } from "@capacitor/core";
+import { LocalNotifications } from "@capacitor/local-notifications";
 
 interface Toast {
   id: string;
@@ -53,9 +55,15 @@ interface AppState {
   loadCaregivers: () => Promise<void>;
   fetchInitialData: () => Promise<void>;
   setCurrentPet: (pet: DogProfile | null) => void;
+  onboardingCompleted: boolean;
+  completeOnboarding: () => void;
+  resetOnboarding: () => void;
 }
 
 let toastCounter = 0;
+
+const ADMIN_CAREGIVER: Caregiver = { id: "admin", name: "Administrador", role: "admin", password: "" };
+let cachedFallbackCaregiver: Caregiver | null = null;
 
 export const useAppStore = create<AppState>()(
   persist(
@@ -76,6 +84,9 @@ export const useAppStore = create<AppState>()(
       adminPassword: "admin",
       sensorStatus: null,
       hasToken: !!localStorage.getItem("jwt_token"),
+      onboardingCompleted: false,
+      completeOnboarding: () => set({ onboardingCompleted: true }),
+      resetOnboarding: () => set({ onboardingCompleted: false }),
 
       toggleEvents: () => set((s) => ({ showEventsOnChart: !s.showEventsOnChart })),
       setChartFullscreen: (val) => set({ isChartFullscreen: val }),
@@ -85,6 +96,17 @@ export const useAppStore = create<AppState>()(
       setInstallPrompt: (val) => set({ showInstallPrompt: val }),
 
       requestNotificationPermission: async () => {
+        if (Capacitor.isNativePlatform()) {
+          try {
+            const status = await LocalNotifications.requestPermissions();
+            const permission = status.display === "granted" ? "granted" : "denied";
+            set({ notificationPermission: permission });
+            return permission;
+          } catch (e) {
+            console.error("Error requesting native notifications permission:", e);
+            return "denied";
+          }
+        }
         if (!("Notification" in window)) return "denied" as NotificationPermission;
         const permission = await Notification.requestPermission();
         set({ notificationPermission: permission });
@@ -184,8 +206,17 @@ export const useAppStore = create<AppState>()(
 
       currentCaregiver: () => {
         const state = get();
+        if (state.isAdminLoggedIn) {
+          return ADMIN_CAREGIVER;
+        }
         if (!state.currentCaregiverId) return null;
-        return state.caregivers.find((c) => c.id === state.currentCaregiverId) || null;
+        const caregiversList = Array.isArray(state.caregivers) ? state.caregivers : [];
+        const found = caregiversList.find((c) => c.id === state.currentCaregiverId);
+        if (found) return found;
+        if (!cachedFallbackCaregiver || cachedFallbackCaregiver.id !== state.currentCaregiverId) {
+          cachedFallbackCaregiver = { id: state.currentCaregiverId, name: "Cuidador", role: "family", password: "" };
+        }
+        return cachedFallbackCaregiver;
       },
 
       addCaregiver: async (caregiver) => {
@@ -373,9 +404,10 @@ export const useAppStore = create<AppState>()(
         try {
           const { apiRequest } = await import("../utils/api");
           const list = await apiRequest("/pets");
-          set({ pets: list });
-          if (list.length > 0) {
-            const petToSet = get().currentPet || list[0];
+          const verifiedList = Array.isArray(list) ? list : [];
+          set({ pets: verifiedList });
+          if (verifiedList.length > 0) {
+            const petToSet = get().currentPet || verifiedList[0];
             get().setCurrentPet(petToSet);
           }
         } catch (e) {
@@ -387,7 +419,7 @@ export const useAppStore = create<AppState>()(
         try {
           const { apiRequest } = await import("../utils/api");
           const list = await apiRequest("/caregivers");
-          set({ caregivers: list });
+          set({ caregivers: Array.isArray(list) ? list : [] });
         } catch (e) {
           console.error("Failed to load caregivers:", e);
         }
@@ -423,6 +455,19 @@ export const useAppStore = create<AppState>()(
       },
 
       fetchInitialData: async () => {
+        if (Capacitor.isNativePlatform()) {
+          try {
+            const status = await LocalNotifications.checkPermissions();
+            const permission = status.display === "granted" ? "granted" : 
+                               status.display === "denied" ? "denied" : "default";
+            if (get().notificationPermission !== permission) {
+              set({ notificationPermission: permission });
+            }
+          } catch (e) {
+            console.error("Error checking native notifications permission:", e);
+          }
+        }
+
         const token = localStorage.getItem("jwt_token");
         if (!token) return;
 
@@ -503,7 +548,8 @@ export const useAppStore = create<AppState>()(
         sensorStatus: state.sensorStatus,
         pets: state.pets,
         currentPet: state.currentPet,
-        hasToken: state.hasToken
+        hasToken: state.hasToken,
+        onboardingCompleted: state.onboardingCompleted
       }),
     }
   )

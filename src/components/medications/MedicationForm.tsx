@@ -40,7 +40,7 @@ export default function MedicationForm({ onClose }: Props) {
     editingMedication?.scheduledTimes || DEFAULT_TIMES.once
   );
   const [notifyMinutesBefore, setNotifyMinutesBefore] = useState<number>(
-    editingMedication?.notifyMinutesBefore ?? 0
+    editingMedication?.notifyMinutesBefore ?? 30
   );
   const [startDate, setStartDate] = useState<string>(
     editingMedication?.startDate || new Date().toISOString().split("T")[0]

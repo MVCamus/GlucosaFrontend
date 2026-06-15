@@ -2,6 +2,8 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Medication, MedicationLog, MedDailySlot, MedSlotStatus } from "../types/medication";
 import { getShiftedTimeForSlot } from "../utils/medSlots";
+import { useAppStore } from "./appStore";
+import { getLocalDateStr } from "../utils/date";
 
 interface MedicationState {
   medications: Medication[];
@@ -39,7 +41,7 @@ export const useMedicationStore = create<MedicationState>()(
         };
         set((state) => ({ medications: [...state.medications, newMed] }));
 
-        const petId = localStorage.getItem('active_pet_id');
+        const petId = useAppStore.getState().currentPet?.id;
         if (petId && localStorage.getItem('jwt_token')) {
           try {
             const { apiRequest } = await import("../utils/api");
@@ -76,7 +78,7 @@ export const useMedicationStore = create<MedicationState>()(
           ),
         }));
 
-        const petId = localStorage.getItem('active_pet_id') || 'any';
+        const petId = useAppStore.getState().currentPet?.id || 'any';
         if (localStorage.getItem('jwt_token') && !id.startsWith("m-")) {
           try {
             const { apiRequest } = await import("../utils/api");
@@ -92,21 +94,18 @@ export const useMedicationStore = create<MedicationState>()(
 
       deactivateMedication: async (id) => {
         set((state) => ({
-          medications: state.medications.map((m) =>
-            m.id === id ? { ...m, active: false } : m
-          ),
+          medications: state.medications.filter((m) => m.id !== id),
         }));
 
-        const petId = localStorage.getItem('active_pet_id') || 'any';
+        const petId = useAppStore.getState().currentPet?.id || 'any';
         if (localStorage.getItem('jwt_token') && !id.startsWith("m-")) {
           try {
             const { apiRequest } = await import("../utils/api");
             await apiRequest(`/pets/${petId}/medications/${id}`, {
-              method: "PUT",
-              body: JSON.stringify({ active: false })
+              method: "DELETE"
             });
           } catch (err) {
-            console.error("Failed to deactivate medication on backend:", err);
+            console.error("Failed to delete medication on backend:", err);
           }
         }
       },
@@ -127,7 +126,7 @@ export const useMedicationStore = create<MedicationState>()(
         };
         set((state) => ({ logs: [...state.logs, newLog] }));
 
-        const petId = localStorage.getItem('active_pet_id') || 'any';
+        const petId = useAppStore.getState().currentPet?.id || 'any';
         if (localStorage.getItem('jwt_token') && !medicationId.startsWith("m-")) {
           try {
             const { apiRequest } = await import("../utils/api");
@@ -159,7 +158,7 @@ export const useMedicationStore = create<MedicationState>()(
           logs: state.logs.filter((l) => l.id !== logId),
         }));
 
-        const petId = localStorage.getItem('active_pet_id') || 'any';
+        const petId = useAppStore.getState().currentPet?.id || 'any';
         if (log && localStorage.getItem('jwt_token') && !logId.startsWith("ml-")) {
           try {
             const { apiRequest } = await import("../utils/api");
@@ -225,7 +224,7 @@ export const useMedicationStore = create<MedicationState>()(
       },
 
       getLogsForDate: (date) => {
-        return get().logs.filter((l) => l.givenAt.startsWith(date));
+        return get().logs.filter((l) => getLocalDateStr(l.givenAt) === date);
       },
 
       openForm: (medication) => {

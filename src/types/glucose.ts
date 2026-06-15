@@ -6,6 +6,7 @@ export interface GlucoseReading {
   trend: GlucoseTrend;
   isHigh: boolean;
   isLow: boolean;
+  source?: "sensor" | "manual";
 }
 
 export type GlucoseTrend =

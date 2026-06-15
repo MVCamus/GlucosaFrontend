@@ -6,6 +6,7 @@ import MedOverdueAlert from "../components/medications/MedOverdueAlert";
 import MedicationCard from "../components/medications/MedicationCard";
 import MedicationForm from "../components/medications/MedicationForm";
 import { computeDailySlots, groupSlotsByMedication, type MedicationWithSlots } from "../utils/medSlots";
+import { getTodayStr } from "../utils/date";
 
 export default function MedicationsPage() {
   const [showForm, setShowForm] = useState(false);
@@ -13,7 +14,7 @@ export default function MedicationsPage() {
   const logs = useMedicationStore((s: any) => s.logs);
   const openForm = useMedicationStore((s: any) => s.openForm);
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = getTodayStr();
   const slots = computeDailySlots(medications, logs, today);
   const grouped = groupSlotsByMedication(slots);
 

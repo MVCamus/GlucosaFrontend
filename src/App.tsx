@@ -13,6 +13,9 @@ import ReportsPage from "./pages/ReportsPage";
 import LoginPage from "./pages/LoginPage";
 import { useAppStore } from "./stores/appStore";
 import { useSync } from "./hooks/useSync";
+import { useMedNotifications } from "./hooks/useMedNotifications";
+import { Capacitor } from "@capacitor/core";
+import { LocalNotifications } from "@capacitor/local-notifications";
 
 export default function App() {
   const setOnline = useAppStore((s) => s.setOnline);
@@ -22,6 +25,28 @@ export default function App() {
 
   // Habilitar la sincronización en segundo plano
   useSync();
+
+  // Programar recordatorios de remedios
+  useMedNotifications();
+
+  // Escuchar notificaciones locales en primer plano
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+      const listenerPromise = LocalNotifications.addListener(
+        "localNotificationReceived",
+        (notification) => {
+          useAppStore.getState().addToast({
+            message: `🔔 ${notification.title}: ${notification.body}`,
+            type: "info",
+          });
+        }
+      );
+
+      return () => {
+        listenerPromise.then((handle) => handle.remove());
+      };
+    }
+  }, []);
 
   useEffect(() => {
     // Limpiar remedios de prueba persistidos en localStorage si existen
@@ -66,7 +91,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 overflow-x-hidden">
         <ConnectivityBanner />
         <div className="max-w-lg md:max-w-xl lg:max-w-2xl mx-auto pb-24">
           <InstallPrompt />

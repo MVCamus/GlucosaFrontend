@@ -15,7 +15,7 @@ export default function SensorBanner() {
 
   if (!sensor) {
     return (
-      <div className="bg-white border border-gray-100 rounded-xl p-3 mx-4 mb-3 shadow-sm flex items-center gap-2">
+      <div id="tour-sensor-banner" className="bg-white border border-gray-100 rounded-xl p-3 mx-4 mb-3 shadow-sm flex items-center gap-2">
         <Activity size={16} className="text-gray-400" />
         <span className="text-sm font-semibold text-gray-500">No hay un sensor activo registrado</span>
       </div>
@@ -29,7 +29,7 @@ export default function SensorBanner() {
   const statusText = remaining > 0 ? `${remaining} días restantes` : "Sensor caducado — reemplazar ahora";
 
   return (
-    <div className="bg-white border border-gray-100 rounded-xl p-3 mx-4 mb-3 shadow-sm">
+    <div id="tour-sensor-banner" className="bg-white border border-gray-100 rounded-xl p-3 mx-4 mb-3 shadow-sm">
       <div className="flex items-center gap-2 mb-2">
         <Activity size={16} className="text-orange-500" />
         <span className="text-sm font-semibold text-gray-700">Sensor activo</span>

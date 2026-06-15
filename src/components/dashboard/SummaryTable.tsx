@@ -3,7 +3,7 @@ import { Droplets, UtensilsCrossed, Pill, Syringe } from "lucide-react";
 import { useGlucoseStore } from "../../stores/glucoseStore";
 import { useRegistryStore } from "../../stores/registryStore";
 import { useMedicationStore } from "../../stores/medicationStore";
-import { formatTime } from "../../utils/date";
+import { formatTime, getLocalDateStr } from "../../utils/date";
 import { getInsulinLabel } from "../../types/insulin";
 import { MOCK_INSULIN_RECORDS } from "../../mocks/insulin";
 import { MOCK_FOOD_RECORDS } from "../../mocks/food";
@@ -28,12 +28,12 @@ export default function SummaryTable() {
   const rGlucose = useRegistryStore((s) => s.glucoseRecords);
   const rInsulin = useRegistryStore((s) => s.insulinRecords);
   const rFood = useRegistryStore((s) => s.foodRecords);
-  const medLogs = allLogs.filter((l) => l.givenAt.startsWith(selectedDate));
+  const medLogs = allLogs.filter((l) => getLocalDateStr(l.givenAt) === selectedDate);
 
   const rows = useMemo(() => {
     const result: { time: string; timestamp: string; type: string; value: string; caregiver: string; icon: React.ReactNode; filterType: FilterType }[] = [];
 
-    const userG = rGlucose.filter((r) => r.timestamp.startsWith(selectedDate));
+    const userG = rGlucose.filter((r) => getLocalDateStr(r.timestamp) === selectedDate);
     const mockG = selectedDate === MOCK_DATA_DATE ? MOCK_GLUCOSE_READINGS : [];
     [...userG, ...mockG].forEach((r) => {
       result.push({
@@ -47,7 +47,7 @@ export default function SummaryTable() {
       });
     });
 
-    const userI = rInsulin.filter((r) => r.timestamp.startsWith(selectedDate));
+    const userI = rInsulin.filter((r) => getLocalDateStr(r.timestamp) === selectedDate);
     const mockI = selectedDate === MOCK_DATA_DATE ? MOCK_INSULIN_RECORDS : [];
     [...userI, ...mockI].forEach((r) => {
       result.push({
@@ -61,7 +61,7 @@ export default function SummaryTable() {
       });
     });
 
-    const userF = rFood.filter((r) => r.timestamp.startsWith(selectedDate));
+    const userF = rFood.filter((r) => getLocalDateStr(r.timestamp) === selectedDate);
     const mockF = selectedDate === MOCK_DATA_DATE ? MOCK_FOOD_RECORDS : [];
     [...userF, ...mockF].forEach((r) => {
       result.push({

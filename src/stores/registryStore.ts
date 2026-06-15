@@ -4,6 +4,94 @@ import type { GlucoseReading } from "../types/glucose";
 import type { InsulinRecord } from "../types/insulin";
 import type { FoodRecord } from "../types/food";
 import type { CriticalAlert } from "../types/alerts";
+import { Capacitor } from "@capacitor/core";
+import { LocalNotifications } from "@capacitor/local-notifications";
+import { useAppStore } from "./appStore";
+
+async function checkAndNotifyGlucose(value: number) {
+  const registryState = useRegistryStore.getState();
+  const appState = useAppStore.getState();
+  if (appState.notificationPermission !== "granted") return;
+  
+  const currentPet = appState.currentPet;
+  if (!currentPet) return;
+  
+  const lowLimit = currentPet.targetLow ?? 70;
+  const highLimit = currentPet.targetHigh ?? 250;
+  const petName = currentPet.name;
+  
+  let title = "";
+  let body = "";
+  let isLow = false;
+  let isHigh = false;
+  
+  if (value < lowLimit) {
+    isLow = true;
+    title = `⚠️ Alerta de Glucosa Baja: ${petName}`;
+    body = `La glucosa de ${petName} está en ${value} mg/dL, por debajo del límite de ${lowLimit} mg/dL.`;
+  } else if (value > highLimit) {
+    isHigh = true;
+    title = `⚠️ Alerta de Glucosa Alta: ${petName}`;
+    body = `La glucosa de ${petName} está en ${value} mg/dL, por encima del límite de ${highLimit} mg/dL.`;
+  } else {
+    return;
+  }
+  
+  const now = Date.now();
+  if (isLow) {
+    // 30 min cooldown
+    const cooldown = 30 * 60 * 1000;
+    if (now - registryState.lastLowAlertTime < cooldown) {
+      console.log("Glucose low alert skipped due to cooldown");
+      return;
+    }
+    useRegistryStore.setState({ lastLowAlertTime: now });
+  } else if (isHigh) {
+    // 60 min cooldown
+    const cooldown = 60 * 60 * 1000;
+    if (now - registryState.lastHighAlertTime < cooldown) {
+      console.log("Glucose high alert skipped due to cooldown");
+      return;
+    }
+    useRegistryStore.setState({ lastHighAlertTime: now });
+  }
+  
+  if (Capacitor.isNativePlatform()) {
+    try {
+      // Ensure the high-importance channel exists
+      await LocalNotifications.createChannel({
+        id: "critical-alerts",
+        name: "Alertas Críticas",
+        description: "Canal para alertas de glucosa alta y baja",
+        importance: 5, // IMPORTANCE_HIGH (banner + sound + vibration)
+        vibration: true,
+        visibility: 1,
+      });
+
+      await LocalNotifications.schedule({
+        notifications: [
+          {
+            title,
+            body,
+            id: isLow ? 20001 : 20002, // Keep one notification per type to overwrite
+            channelId: "critical-alerts",
+            schedule: {
+              at: new Date(Date.now() + 500),
+              allowWhileIdle: true,
+            },
+          },
+        ],
+      });
+    } catch (e) {
+      console.error("Error sending native glucose notification:", e);
+    }
+  } else if ("Notification" in window) {
+    new Notification(title, {
+      body,
+      icon: "/pwa-192x192.png",
+    });
+  }
+}
 
 type SubmitResult = { success: true } | { success: false; alert: CriticalAlert };
 
@@ -16,19 +104,20 @@ interface RegistryState {
   alerts: CriticalAlert[];
   isAlertModalOpen: boolean;
   currentAlert: CriticalAlert | null;
+  lastLowAlertTime: number;
+  lastHighAlertTime: number;
   submitInsulin: (record: Omit<InsulinRecord, "id">) => Promise<SubmitResult>;
   submitFood: (record: Omit<FoodRecord, "id">) => Promise<void>;
-  submitGlucose: (record: Omit<GlucoseReading, "id">) => void;
   checkDoubleDose: () => boolean;
   resolveAlert: (alertId: string, resolution: "cancelled" | "forced") => void;
   getLastInsulinInRange: (hours: number) => InsulinRecord | null;
+  submitGlucose: (record: Omit<GlucoseReading, "id">) => Promise<void>;
   addServerGlucoseReadings: (readings: GlucoseReading[]) => void;
   addServerInsulinRecords: (records: InsulinRecord[]) => void;
   addServerFoodRecords: (records: FoodRecord[]) => void;
 }
 
 let alertCounter = 0;
-let glucoseCounter = 0;
 
 export const useRegistryStore = create<RegistryState>()(
   persist(
@@ -41,6 +130,8 @@ export const useRegistryStore = create<RegistryState>()(
       alerts: [],
       isAlertModalOpen: false,
       currentAlert: null,
+      lastLowAlertTime: 0,
+      lastHighAlertTime: 0,
 
       submitInsulin: async (record) => {
         const state = get();
@@ -69,7 +160,7 @@ export const useRegistryStore = create<RegistryState>()(
         set({ insulinRecords: [...state.insulinRecords, newRecord] });
 
         // Intentar guardar en backend
-        const petId = localStorage.getItem('active_pet_id');
+        const petId = useAppStore.getState().currentPet?.id;
         if (petId && localStorage.getItem('jwt_token')) {
           try {
             const { apiRequest } = await import("../utils/api");
@@ -102,7 +193,7 @@ export const useRegistryStore = create<RegistryState>()(
         const newRecord: FoodRecord = { ...record, id: tempId };
         set((state) => ({ foodRecords: [...state.foodRecords, newRecord] }));
 
-        const petId = localStorage.getItem('active_pet_id');
+        const petId = useAppStore.getState().currentPet?.id;
         if (petId && localStorage.getItem('jwt_token')) {
           try {
             const { apiRequest } = await import("../utils/api");
@@ -128,11 +219,41 @@ export const useRegistryStore = create<RegistryState>()(
         }
       },
 
-      submitGlucose: (record) => {
-        const newRecord: GlucoseReading = { ...record, id: `g-${++glucoseCounter}` };
-        set((state) => ({ glucoseRecords: [...state.glucoseRecords, newRecord] }));
-      },
+      submitGlucose: async (record) => {
+        const tempId = crypto.randomUUID();
+        const newRecord: GlucoseReading = { ...record, id: tempId };
+        set((state) => ({
+          glucoseRecords: [...state.glucoseRecords, newRecord].sort(
+            (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+          ),
+        }));
 
+        const petId = useAppStore.getState().currentPet?.id;
+        if (petId && localStorage.getItem('jwt_token')) {
+          try {
+            const { apiRequest } = await import("../utils/api");
+            const saved = await apiRequest(`/pets/${petId}/glucose`, {
+              method: "POST",
+              body: JSON.stringify({
+                value: record.value,
+                trend: record.trend,
+                isHigh: record.isHigh,
+                isLow: record.isLow,
+                source: "manual",
+                recordedAt: record.timestamp,
+                clientId: tempId
+              })
+            });
+            if (saved?.id) {
+              set((s) => ({
+                glucoseRecords: s.glucoseRecords.map((r) => r.id === tempId ? { ...r, id: saved.id } : r)
+              }));
+            }
+          } catch (err) {
+            console.error("Failed to push glucose to backend:", err);
+          }
+        }
+      },
       checkDoubleDose: () => {
         const state = get();
         const now = Date.now();
@@ -182,6 +303,20 @@ export const useRegistryStore = create<RegistryState>()(
           const existingIds = new Set(state.glucoseRecords.map((r) => r.id));
           const newReadings = readings.filter((r) => !existingIds.has(r.id));
           if (newReadings.length === 0) return {};
+
+          // Check if the most recent new reading is very recent and out of range
+          const sortedNew = [...newReadings].sort(
+            (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+          );
+          if (sortedNew.length > 0) {
+            const mostRecent = sortedNew[0];
+            const readingTime = new Date(mostRecent.timestamp).getTime();
+            const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
+            if (readingTime > tenMinutesAgo) {
+              checkAndNotifyGlucose(mostRecent.value);
+            }
+          }
+
           return {
             glucoseRecords: [...state.glucoseRecords, ...newReadings].sort(
               (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
@@ -222,6 +357,8 @@ export const useRegistryStore = create<RegistryState>()(
         insulinRecords: state.insulinRecords,
         foodRecords: state.foodRecords,
         glucoseRecords: state.glucoseRecords,
+        lastLowAlertTime: state.lastLowAlertTime,
+        lastHighAlertTime: state.lastHighAlertTime,
       }),
     }
   )

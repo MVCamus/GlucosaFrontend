@@ -13,6 +13,7 @@ import {
 import { useGlucoseStore } from "../../stores/glucoseStore";
 import { useRegistryStore } from "../../stores/registryStore";
 import { formatReadingsForChart, getGlucoseZoneColor } from "../../utils/chart";
+import { getLocalDateStr } from "../../utils/date";
 
 const MOCK_DATA_DATE = "2026-06-03";
 
@@ -23,7 +24,7 @@ export default function GlucoseChart() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const chartData = useMemo(() => {
-    const userForDate = userReadings.filter((r) => r.timestamp.startsWith(selectedDate));
+    const userForDate = userReadings.filter((r) => getLocalDateStr(r.timestamp) === selectedDate);
     const mockForDate = selectedDate === MOCK_DATA_DATE && dailySummary ? dailySummary.glucoseReadings : [];
     const all = [...userForDate, ...mockForDate].sort(
       (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
@@ -38,7 +39,7 @@ export default function GlucoseChart() {
 
   if (!dailySummary || chartData.length === 0) {
     return (
-      <div className="bg-white rounded-xl p-6 mx-4 mb-3 shadow-sm text-center text-gray-400">
+      <div id="tour-glucose-chart" className="bg-white rounded-xl p-6 mx-4 mb-3 shadow-sm text-center text-gray-400">
         Sin datos de glucosa para este día
       </div>
     );
@@ -47,7 +48,7 @@ export default function GlucoseChart() {
   const chartMinWidth = Math.max(600, chartData.length * 50);
 
   return (
-    <div className="mx-4 mb-3 space-y-3">
+    <div id="tour-glucose-chart" className="mx-4 mb-3 space-y-3">
       {lastReading && (
         <div className="bg-white border border-gray-100 rounded-xl p-5 shadow-sm flex items-center justify-between">
           <div>

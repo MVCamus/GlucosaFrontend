@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { Syringe, UtensilsCrossed } from "lucide-react";
 import { useGlucoseStore } from "../../stores/glucoseStore";
 import { useRegistryStore } from "../../stores/registryStore";
-import { formatTime } from "../../utils/date";
+import { formatTime, getLocalDateStr } from "../../utils/date";
 import { getInsulinLabel } from "../../types/insulin";
 import { MOCK_INSULIN_RECORDS } from "../../mocks/insulin";
 import { MOCK_FOOD_RECORDS } from "../../mocks/food";
@@ -40,16 +40,16 @@ export default function EventGlucoseSummary() {
   const rows = useMemo(() => {
     const result: EventRow[] = [];
     const allReadings = [
-      ...uReadings.filter((r) => r.timestamp.startsWith(selectedDate)),
+      ...uReadings.filter((r) => getLocalDateStr(r.timestamp) === selectedDate),
       ...(selectedDate === MOCK_DATA_DATE ? MOCK_GLUCOSE_READINGS : []),
     ].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
     const insulinEvts = [
-      ...uInsulin.filter((r) => r.timestamp.startsWith(selectedDate)),
+      ...uInsulin.filter((r) => getLocalDateStr(r.timestamp) === selectedDate),
       ...(selectedDate === MOCK_DATA_DATE ? MOCK_INSULIN_RECORDS : []),
     ];
     const foodEvts = [
-      ...uFood.filter((r) => r.timestamp.startsWith(selectedDate)),
+      ...uFood.filter((r) => getLocalDateStr(r.timestamp) === selectedDate),
       ...(selectedDate === MOCK_DATA_DATE ? MOCK_FOOD_RECORDS : []),
     ];
 
@@ -79,10 +79,17 @@ export default function EventGlucoseSummary() {
     return result;
   }, [selectedDate, uReadings, uInsulin, uFood]);
 
-  if (rows.length === 0) return null;
+  if (rows.length === 0) {
+    return (
+      <div id="tour-event-summary" className="bg-white border border-gray-100 rounded-xl p-4 mx-4 mb-3 shadow-sm text-center py-6 text-gray-400">
+        <h3 className="text-sm font-semibold text-gray-500 mb-1">Eventos del día</h3>
+        <p className="text-xs text-gray-400">Aún no hay comidas ni dosis de insulina registradas hoy.</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="bg-white border border-gray-100 rounded-xl p-4 mx-4 mb-3 shadow-sm">
+    <div id="tour-event-summary" className="bg-white border border-gray-100 rounded-xl p-4 mx-4 mb-3 shadow-sm">
       <h3 className="text-sm font-semibold text-gray-600 mb-3">Glucosa antes de cada evento</h3>
       <div className="space-y-2">
         {rows.map((r, i) => (

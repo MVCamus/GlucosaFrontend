@@ -20,7 +20,7 @@ export default function BottomNav() {
         paddingBottom: "env(safe-area-inset-bottom, 0px)",
       }}
     >
-      <div className="max-w-lg md:max-w-xl lg:max-w-2xl mx-auto bg-white/95 backdrop-blur-sm border-t border-gray-100 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] rounded-t-2xl">
+      <div id="tour-bottom-nav" className="max-w-lg md:max-w-xl lg:max-w-2xl mx-auto bg-white/95 backdrop-blur-sm border-t border-gray-100 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] rounded-t-2xl">
         <div className="flex justify-around items-center h-[60px] px-4 md:px-6">
           {tabs.map(({ path, label, Icon }) => {
             const active = location.pathname === path;

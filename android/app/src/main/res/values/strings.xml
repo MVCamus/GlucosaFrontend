@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Glucosa App</string>
+    <string name="title_activity_main">Glucosa App</string>
+    <string name="package_name">com.marcelo.glucosa</string>
+    <string name="custom_url_scheme">com.marcelo.glucosa</string>
+</resources>
