@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "121219520410",
+    "project_id": "glucosapolo",
+    "storage_bucket": "glucosapolo.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:121219520410:android:641d1afd8f22dfef084c23",
+        "android_client_info": {
+          "package_name": "glucosa.polo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB18v3ePqm3kx_qAAaxGC_mRxRYBr7V1Rw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

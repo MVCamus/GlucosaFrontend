@@ -5,6 +5,7 @@ import type { SensorStatus } from "../types/sensor";
 import type { DogProfile } from "../types/dog";
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
+import { PushNotifications } from "@capacitor/push-notifications";
 
 interface Toast {
   id: string;
@@ -54,6 +55,7 @@ interface AppState {
   loadPets: () => Promise<void>;
   loadCaregivers: () => Promise<void>;
   fetchInitialData: () => Promise<void>;
+  registerPushNotifications: () => Promise<void>;
   setCurrentPet: (pet: DogProfile | null) => void;
   onboardingCompleted: boolean;
   completeOnboarding: () => void;
@@ -111,6 +113,50 @@ export const useAppStore = create<AppState>()(
         const permission = await Notification.requestPermission();
         set({ notificationPermission: permission });
         return permission;
+      },
+
+      registerPushNotifications: async () => {
+        if (!Capacitor.isNativePlatform()) return;
+
+        try {
+          let permStatus = await PushNotifications.checkPermissions();
+          if (permStatus.receive === "prompt") {
+            permStatus = await PushNotifications.requestPermissions();
+          }
+
+          if (permStatus.receive !== "granted") {
+            console.warn("User denied push notifications permission");
+            return;
+          }
+
+          await PushNotifications.register();
+
+          PushNotifications.addListener("registration", async (token) => {
+            console.log("Push registration success, token: " + token.value);
+            const jwtToken = localStorage.getItem("jwt_token");
+            if (jwtToken) {
+              const { apiRequest } = await import("../utils/api");
+              await apiRequest("/caregivers/fcm-token", {
+                method: "POST",
+                body: JSON.stringify({ fcmToken: token.value }),
+              }).catch((err) => console.error("Failed to upload FCM token to backend", err));
+            }
+          });
+
+          PushNotifications.addListener("registrationError", (error) => {
+            console.error("Error on push registration: " + JSON.stringify(error));
+          });
+
+          PushNotifications.addListener("pushNotificationReceived", (notification) => {
+            console.log("Push received: " + JSON.stringify(notification));
+          });
+
+          PushNotifications.addListener("pushNotificationActionPerformed", (notification) => {
+            console.log("Push action performed: " + JSON.stringify(notification));
+          });
+        } catch (e) {
+          console.error("Error setting up push notifications:", e);
+        }
       },
 
       addToast: (toast) => {
@@ -177,6 +223,7 @@ export const useAppStore = create<AppState>()(
             });
 
             await get().fetchInitialData();
+            await get().registerPushNotifications();
             return true;
           }
         } catch (error) {
@@ -470,6 +517,8 @@ export const useAppStore = create<AppState>()(
 
         const token = localStorage.getItem("jwt_token");
         if (!token) return;
+
+        await get().registerPushNotifications();
 
         const state = get();
         if (state.isAdminLoggedIn) {
