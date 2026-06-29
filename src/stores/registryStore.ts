@@ -9,9 +9,8 @@ import { LocalNotifications } from "@capacitor/local-notifications";
 import { useAppStore } from "./appStore";
 
 async function checkAndNotifyGlucose(value: number) {
-  const registryState = useRegistryStore.getState();
   const appState = useAppStore.getState();
-  if (appState.notificationPermission !== "granted") return;
+  const registryState = useRegistryStore.getState();
   
   const currentPet = appState.currentPet;
   if (!currentPet) return;
@@ -23,38 +22,23 @@ async function checkAndNotifyGlucose(value: number) {
   let title = "";
   let body = "";
   let isLow = false;
-  let isHigh = false;
   
   if (value < lowLimit) {
     isLow = true;
     title = `⚠️ Alerta de Glucosa Baja: ${petName}`;
     body = `La glucosa de ${petName} está en ${value} mg/dL, por debajo del límite de ${lowLimit} mg/dL.`;
   } else if (value > highLimit) {
-    isHigh = true;
     title = `⚠️ Alerta de Glucosa Alta: ${petName}`;
     body = `La glucosa de ${petName} está en ${value} mg/dL, por encima del límite de ${highLimit} mg/dL.`;
   } else {
     return;
   }
-  
+
   const now = Date.now();
-  if (isLow) {
-    // 30 min cooldown
-    const cooldown = 30 * 60 * 1000;
-    if (now - registryState.lastLowAlertTime < cooldown) {
-      console.log("Glucose low alert skipped due to cooldown");
-      return;
-    }
-    useRegistryStore.setState({ lastLowAlertTime: now });
-  } else if (isHigh) {
-    // 60 min cooldown
-    const cooldown = 60 * 60 * 1000;
-    if (now - registryState.lastHighAlertTime < cooldown) {
-      console.log("Glucose high alert skipped due to cooldown");
-      return;
-    }
-    useRegistryStore.setState({ lastHighAlertTime: now });
-  }
+  const cooldown = 5 * 60 * 1000;
+  const lastTime = isLow ? registryState.lastLowAlertTime : registryState.lastHighAlertTime;
+  if (now - lastTime < cooldown) return;
+  useRegistryStore.setState(isLow ? { lastLowAlertTime: now } : { lastHighAlertTime: now });
   
   if (Capacitor.isNativePlatform()) {
     try {
@@ -112,9 +96,12 @@ interface RegistryState {
   resolveAlert: (alertId: string, resolution: "cancelled" | "forced") => void;
   getLastInsulinInRange: (hours: number) => InsulinRecord | null;
   submitGlucose: (record: Omit<GlucoseReading, "id">) => Promise<void>;
+  deleteInsulin: (id: string) => Promise<void>;
+  deleteFood: (id: string) => Promise<void>;
   addServerGlucoseReadings: (readings: GlucoseReading[]) => void;
   addServerInsulinRecords: (records: InsulinRecord[]) => void;
   addServerFoodRecords: (records: FoodRecord[]) => void;
+  getUnsyncedRecords: () => { insulin: InsulinRecord[]; food: FoodRecord[]; glucose: GlucoseReading[] };
 }
 
 let alertCounter = 0;
@@ -156,10 +143,9 @@ export const useRegistryStore = create<RegistryState>()(
         }
         
         const tempId = crypto.randomUUID();
-        const newRecord: InsulinRecord = { ...record, id: tempId };
+        const newRecord: InsulinRecord = { ...record, id: tempId, synced: false };
         set({ insulinRecords: [...state.insulinRecords, newRecord] });
 
-        // Intentar guardar en backend
         const petId = useAppStore.getState().currentPet?.id;
         if (petId && localStorage.getItem('jwt_token')) {
           try {
@@ -177,7 +163,7 @@ export const useRegistryStore = create<RegistryState>()(
             });
             if (saved?.id) {
               set((s) => ({
-                insulinRecords: s.insulinRecords.map((r) => r.id === tempId ? { ...r, id: saved.id } : r)
+                insulinRecords: s.insulinRecords.map((r) => r.id === tempId ? { ...r, id: saved.id, synced: true } : r)
               }));
             }
           } catch (err) {
@@ -190,7 +176,7 @@ export const useRegistryStore = create<RegistryState>()(
 
       submitFood: async (record) => {
         const tempId = crypto.randomUUID();
-        const newRecord: FoodRecord = { ...record, id: tempId };
+        const newRecord: FoodRecord = { ...record, id: tempId, synced: false };
         set((state) => ({ foodRecords: [...state.foodRecords, newRecord] }));
 
         const petId = useAppStore.getState().currentPet?.id;
@@ -210,7 +196,7 @@ export const useRegistryStore = create<RegistryState>()(
             });
             if (saved?.id) {
               set((s) => ({
-                foodRecords: s.foodRecords.map((r) => r.id === tempId ? { ...r, id: saved.id } : r)
+                foodRecords: s.foodRecords.map((r) => r.id === tempId ? { ...r, id: saved.id, synced: true } : r)
               }));
             }
           } catch (err) {
@@ -220,8 +206,10 @@ export const useRegistryStore = create<RegistryState>()(
       },
 
       submitGlucose: async (record) => {
+        checkAndNotifyGlucose(record.value);
+
         const tempId = crypto.randomUUID();
-        const newRecord: GlucoseReading = { ...record, id: tempId };
+        const newRecord: GlucoseReading = { ...record, id: tempId, synced: false };
         set((state) => ({
           glucoseRecords: [...state.glucoseRecords, newRecord].sort(
             (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
@@ -246,7 +234,7 @@ export const useRegistryStore = create<RegistryState>()(
             });
             if (saved?.id) {
               set((s) => ({
-                glucoseRecords: s.glucoseRecords.map((r) => r.id === tempId ? { ...r, id: saved.id } : r)
+                glucoseRecords: s.glucoseRecords.map((r) => r.id === tempId ? { ...r, id: saved.id, synced: true } : r)
               }));
             }
           } catch (err) {
@@ -263,13 +251,43 @@ export const useRegistryStore = create<RegistryState>()(
         );
       },
 
+      deleteInsulin: async (id: string) => {
+        const petId = useAppStore.getState().currentPet?.id;
+        if (petId && localStorage.getItem('jwt_token')) {
+          try {
+            const { apiRequest } = await import("../utils/api");
+            await apiRequest(`/pets/${petId}/insulin/${id}`, { method: "DELETE" });
+          } catch (err) {
+            console.error("Failed to delete insulin from backend:", err);
+          }
+        }
+        set((state) => ({
+          insulinRecords: state.insulinRecords.filter((r) => r.id !== id),
+        }));
+      },
+
+      deleteFood: async (id: string) => {
+        const petId = useAppStore.getState().currentPet?.id;
+        if (petId && localStorage.getItem('jwt_token')) {
+          try {
+            const { apiRequest } = await import("../utils/api");
+            await apiRequest(`/pets/${petId}/food/${id}`, { method: "DELETE" });
+          } catch (err) {
+            console.error("Failed to delete food from backend:", err);
+          }
+        }
+        set((state) => ({
+          foodRecords: state.foodRecords.filter((r) => r.id !== id),
+        }));
+      },
+
       resolveAlert: (alertId, resolution) => {
         const state = get();
         const updatedAlerts = state.alerts.map((a) =>
           a.id === alertId ? { ...a, resolved: true, resolution } : a
         );
         if (resolution === "forced" && state.pendingInsulin) {
-          const newRecord: InsulinRecord = { ...state.pendingInsulin, id: `i-${Date.now()}` };
+          const newRecord: InsulinRecord = { ...state.pendingInsulin, id: `i-${Date.now()}`, synced: false };
           set({
             alerts: updatedAlerts,
             isAlertModalOpen: false,
@@ -309,7 +327,7 @@ export const useRegistryStore = create<RegistryState>()(
             (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
           );
           if (sortedNew.length > 0) {
-            const mostRecent = sortedNew[0];
+            const mostRecent = sortedNew[sortedNew.length - 1];
             const readingTime = new Date(mostRecent.timestamp).getTime();
             const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
             if (readingTime > tenMinutesAgo) {
@@ -349,6 +367,15 @@ export const useRegistryStore = create<RegistryState>()(
             ),
           };
         });
+      },
+
+      getUnsyncedRecords: () => {
+        const state = get();
+        return {
+          insulin: state.insulinRecords.filter((r) => r.synced === false),
+          food: state.foodRecords.filter((r) => r.synced === false),
+          glucose: state.glucoseRecords.filter((r) => r.synced === false),
+        };
       },
     }),
     {

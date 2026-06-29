@@ -6,6 +6,7 @@ export interface FoodRecord {
   caregiverId: string;
   caregiverName: string;
   notes?: string;
+  synced?: boolean;
 }
 
 export type FoodType = "pellet" | "casera" | "mix";

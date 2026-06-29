@@ -13,34 +13,40 @@ export default function LoginPage() {
   const [manualName, setManualName] = useState("");
   const [isManual, setIsManual] = useState(caregivers.length === 0);
   const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const handleLogin = async () => {
-    if (!password) {
-      addToast({ message: "Ingresa tu contraseña", type: "warning" });
-      return;
-    }
-    if (mode === "admin") {
-      const ok = await adminLogin(password);
-      if (ok) {
-        addToast({ message: "Bienvenido, Administrador", type: "success" });
-      } else {
-        addToast({ message: "Contraseña de admin incorrecta", type: "error" });
+    setSubmitting(true);
+    try {
+      if (!password) {
+        addToast({ message: "Ingresa tu contraseña", type: "warning" });
+        return;
       }
-      return;
-    }
+      if (mode === "admin") {
+        const ok = await adminLogin(password);
+        if (ok) {
+          addToast({ message: "Bienvenido, Administrador", type: "success" });
+        } else {
+          addToast({ message: "Contraseña de admin incorrecta", type: "error" });
+        }
+        return;
+      }
 
-    const identifier = isManual ? manualName.trim() : selectedId;
-    if (!identifier) {
-      addToast({ message: isManual ? "Ingresa tu nombre" : "Selecciona un cuidador", type: "warning" });
-      return;
-    }
+      const identifier = isManual ? manualName.trim() : selectedId;
+      if (!identifier) {
+        addToast({ message: isManual ? "Ingresa tu nombre" : "Selecciona un cuidador", type: "warning" });
+        return;
+      }
 
-    const success = await login(identifier, password);
-    if (success) {
-      const name = isManual ? identifier : (caregivers.find((c) => c.id === selectedId)?.name || identifier);
-      addToast({ message: `Bienvenido, ${name}`, type: "success" });
-    } else {
-      addToast({ message: "Contraseña incorrecta", type: "error" });
+      const success = await login(identifier, password);
+      if (success) {
+        const name = isManual ? identifier : (caregivers.find((c) => c.id === selectedId)?.name || identifier);
+        addToast({ message: `Bienvenido, ${name}`, type: "success" });
+      } else {
+        addToast({ message: "Contraseña incorrecta", type: "error" });
+      }
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -133,10 +139,11 @@ export default function LoginPage() {
 
             <button
               onClick={handleLogin}
-              className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
+              disabled={submitting}
+              className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
             >
               <LogIn size={18} />
-              Entrar
+              {submitting ? "Entrando..." : "Entrar"}
             </button>
           </div>
         </div>

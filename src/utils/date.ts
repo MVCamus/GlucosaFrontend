@@ -1,17 +1,28 @@
 function parseSafeUTC(dateInput: string | Date): Date {
   if (dateInput instanceof Date) return dateInput;
-  let dateStr = String(dateInput);
-  if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.match(/-\d{2}:?\d{2}$/)) {
-    dateStr = dateStr.replace(' ', 'T');
-    if (dateStr.includes('T')) {
-      dateStr = dateStr + 'Z';
-    }
+  const dateStr = String(dateInput);
+  // Si ya tiene zona horaria (Z, +, o -HH:MM), usar tal cual
+  if (dateStr.endsWith('Z') || dateStr.includes('+') || dateStr.match(/-\d{2}:?\d{2}$/)) {
+    return new Date(dateStr);
+  }
+  // Si es solo fecha (YYYY-MM-DD), tratar como fecha local medianoche
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+  // Si tiene T pero sin zona, asumir hora local
+  if (dateStr.includes('T')) {
+    const [datePart, timePart] = dateStr.split('T');
+    const [y, m, d] = datePart.split('-').map(Number);
+    const [h, min, sec] = timePart.split(':').map(Number);
+    return new Date(y, m - 1, d, h || 0, min || 0, sec || 0);
   }
   return new Date(dateStr);
 }
 
 export function formatDate(dateStr: string): string {
-  return parseSafeUTC(dateStr).toLocaleDateString("es-CL", {
+  const d = parseSafeUTC(dateStr);
+  return d.toLocaleDateString("es-CL", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -19,7 +30,8 @@ export function formatDate(dateStr: string): string {
 }
 
 export function formatTime(dateStr: string): string {
-  return parseSafeUTC(dateStr).toLocaleTimeString("es-CL", {
+  const d = parseSafeUTC(dateStr);
+  return d.toLocaleTimeString("es-CL", {
     hour: "2-digit",
     minute: "2-digit",
   });

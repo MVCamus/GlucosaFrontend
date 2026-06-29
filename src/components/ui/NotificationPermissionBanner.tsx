@@ -7,10 +7,10 @@ export default function NotificationPermissionBanner() {
   const requestPermission = useAppStore((s) => s.requestNotificationPermission);
   const currentPermission = useAppStore((s) => s.notificationPermission);
   const addToast = useAppStore((s) => s.addToast);
-
   const onboardingCompleted = useAppStore((s) => s.onboardingCompleted);
 
-  if (!onboardingCompleted || dismissed || currentPermission === "granted" || currentPermission === "denied") return null;
+
+  if (dismissed || currentPermission === "granted" || currentPermission === "denied" || !onboardingCompleted) return null;
 
   const handleRequest = async () => {
     const result = await requestPermission();

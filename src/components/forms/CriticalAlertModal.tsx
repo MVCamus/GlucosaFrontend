@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { AlertTriangle } from "lucide-react";
 import { useRegistryStore } from "../../stores/registryStore";
 import { getInsulinLabel } from "../../types/insulin";
@@ -44,6 +44,13 @@ export default function CriticalAlertModal() {
     if (holdTimer.current) clearTimeout(holdTimer.current);
     if (progressTimer.current) clearInterval(progressTimer.current);
   };
+
+  useEffect(() => {
+    return () => {
+      if (holdTimer.current) clearTimeout(holdTimer.current);
+      if (progressTimer.current) clearInterval(progressTimer.current);
+    };
+  }, []);
 
   if (!isOpen || !currentAlert) return null;
 

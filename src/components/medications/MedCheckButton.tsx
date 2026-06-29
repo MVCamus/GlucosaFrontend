@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Check, AlertCircle } from "lucide-react";
 import type { MedSlotStatus } from "../../types/medication";
 
@@ -30,6 +30,14 @@ export default function MedCheckButton({ status, onMark, onUnmark }: Props) {
     if (timerRef.current) clearTimeout(timerRef.current);
     setIsUnmarking(false);
   };
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+    };
+  }, []);
 
   const baseClass = "w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200 select-none";
 

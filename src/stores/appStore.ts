@@ -6,6 +6,7 @@ import type { DogProfile } from "../types/dog";
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import { PushNotifications } from "@capacitor/push-notifications";
+import { getTodayStr } from "../utils/date";
 
 interface Toast {
   id: string;
@@ -67,6 +68,8 @@ let toastCounter = 0;
 const ADMIN_CAREGIVER: Caregiver = { id: "admin", name: "Administrador", role: "admin", password: "" };
 let cachedFallbackCaregiver: Caregiver | null = null;
 
+let pushListeners: Array<{ remove: () => void }> = [];
+
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
@@ -83,7 +86,7 @@ export const useAppStore = create<AppState>()(
       currentPet: null,
       currentCaregiverId: null,
       isAdminLoggedIn: false,
-      adminPassword: "admin",
+      adminPassword: "",
       sensorStatus: null,
       hasToken: !!localStorage.getItem("jwt_token"),
       onboardingCompleted: false,
@@ -131,7 +134,10 @@ export const useAppStore = create<AppState>()(
 
           await PushNotifications.register();
 
-          PushNotifications.addListener("registration", async (token) => {
+          pushListeners.forEach((l) => l.remove());
+          pushListeners = [];
+
+          const regListener = await PushNotifications.addListener("registration", async (token) => {
             console.log("Push registration success, token: " + token.value);
             const jwtToken = localStorage.getItem("jwt_token");
             if (jwtToken) {
@@ -142,18 +148,22 @@ export const useAppStore = create<AppState>()(
               }).catch((err) => console.error("Failed to upload FCM token to backend", err));
             }
           });
+          pushListeners.push(regListener);
 
-          PushNotifications.addListener("registrationError", (error) => {
+          const regErrListener = await PushNotifications.addListener("registrationError", (error) => {
             console.error("Error on push registration: " + JSON.stringify(error));
           });
+          pushListeners.push(regErrListener);
 
-          PushNotifications.addListener("pushNotificationReceived", (notification) => {
+          const pushReceivedListener = await PushNotifications.addListener("pushNotificationReceived", (notification) => {
             console.log("Push received: " + JSON.stringify(notification));
           });
+          pushListeners.push(pushReceivedListener);
 
-          PushNotifications.addListener("pushNotificationActionPerformed", (notification) => {
+          const pushActionListener = await PushNotifications.addListener("pushNotificationActionPerformed", (notification) => {
             console.log("Push action performed: " + JSON.stringify(notification));
           });
+          pushListeners.push(pushActionListener);
         } catch (e) {
           console.error("Error setting up push notifications:", e);
         }
@@ -206,8 +216,7 @@ export const useAppStore = create<AppState>()(
               id: caregiverData.id,
               name: caregiverData.name,
               role: caregiverData.role,
-              petId: caregiverData.petId,
-              password
+              petId: caregiverData.petId
             };
             if (idx >= 0) {
               currentList[idx] = caregiverObj;
@@ -230,13 +239,6 @@ export const useAppStore = create<AppState>()(
           console.error("Backend login failed:", error);
         }
 
-        // Fallback local
-        const state = get();
-        const caregiver = state.caregivers.find((c) => c.id === caregiverIdOrName || c.name.toLowerCase() === caregiverIdOrName.toLowerCase());
-        if (caregiver && caregiver.password === password) {
-          set({ currentCaregiverId: caregiver.id, isAdminLoggedIn: false, hasToken: false });
-          return true;
-        }
         return false;
       },
 
@@ -286,7 +288,6 @@ export const useAppStore = create<AppState>()(
                   id: response.id,
                   name: response.name,
                   role: response.role,
-                  password: caregiver.password,
                   petId: response.petId
                 },
               ],
@@ -395,7 +396,7 @@ export const useAppStore = create<AppState>()(
                 sensorModel: response.sensorModel,
                 serialNumber: response.serialNumber,
                 status: response.status,
-                daysRemaining: 14
+                daysRemaining: Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
               }
             });
             get().addToast({ message: "Sensor registrado en el servidor", type: "success" });
@@ -531,12 +532,14 @@ export const useAppStore = create<AppState>()(
             await get().loadCaregivers();
             
             const caregiver = get().caregivers.find(c => c.id === state.currentCaregiverId);
-            if (caregiver && caregiver.petId) {
-              const pet = await apiRequest(`/pets/${caregiver.petId}`);
+            let targetPetId = caregiver?.petId;
+
+            if (targetPetId) {
+              const pet = await apiRequest(`/pets/${targetPetId}`);
               set({ currentPet: pet });
 
               try {
-                const sensor = await apiRequest(`/pets/${caregiver.petId}/sensors/current`);
+                const sensor = await apiRequest(`/pets/${targetPetId}/sensors/current`);
                 set({
                   sensorStatus: {
                     id: sensor.id,
@@ -552,11 +555,56 @@ export const useAppStore = create<AppState>()(
                 console.warn("No active sensor found for pet:", sensorErr);
                 set({ sensorStatus: null });
               }
+
+              try {
+                const response = await apiRequest(`/pets/${targetPetId}/medications`);
+                if (response && Array.isArray(response)) {
+                  const mappedMeds = response.map((m: any) => ({
+                    id: m.id,
+                    name: m.name,
+                    dose: m.dose,
+                    frequency: m.frequency,
+                    scheduledTimes: m.scheduledTimes,
+                    notifyMinutesBefore: m.notifyMinutesBefore,
+                    active: m.active,
+                    isStrict: m.isStrict ?? false,
+                    createdAt: m.createdAt || new Date().toISOString(),
+                    startDate: m.startDate ? m.startDate.split('T')[0] : getTodayStr(),
+                    endDate: m.endDate ? m.endDate.split('T')[0] : undefined,
+                  }));
+                  const { useMedicationStore } = await import("./medicationStore");
+                  useMedicationStore.getState().addServerMedications(mappedMeds);
+                }
+              } catch (medErr) {
+                console.warn("Failed to load medications:", medErr);
+              }
+
+              try {
+                const today = getTodayStr();
+                const glucoseData = await apiRequest(`/pets/${targetPetId}/glucose?date=${today}`);
+                if (glucoseData && Array.isArray(glucoseData)) {
+                  const mapped = glucoseData.map((r: any) => ({
+                    id: r.id,
+                    timestamp: r.recordedAt,
+                    value: r.value,
+                    unit: r.unit || 'mg/dL',
+                    trend: r.trend,
+                    isHigh: r.isHigh,
+                    isLow: r.isLow,
+                    source: r.source,
+                  }));
+                  const { useRegistryStore } = await import("./registryStore");
+                  useRegistryStore.getState().addServerGlucoseReadings(mapped);
+                }
+              } catch (glucoseErr) {
+                console.warn("Failed to load glucose readings:", glucoseErr);
+              }
+
+              localStorage.removeItem(`last_sync_time_${targetPetId}`);
             } else {
-              // Si no tiene petId o no se encuentra
-              // Intentar usar la primera mascota registrada como fallback si existe alguna
               const petsList = await apiRequest("/pets").catch(() => []);
               if (petsList.length > 0) {
+                targetPetId = petsList[0].id;
                 set({ currentPet: petsList[0] });
                 try {
                   const sensor = await apiRequest(`/pets/${petsList[0].id}/sensors/current`);
@@ -574,6 +622,52 @@ export const useAppStore = create<AppState>()(
                 } catch {
                   set({ sensorStatus: null });
                 }
+
+                try {
+                  const response = await apiRequest(`/pets/${targetPetId}/medications`);
+                  if (response && Array.isArray(response)) {
+                    const mappedMeds = response.map((m: any) => ({
+                      id: m.id,
+                      name: m.name,
+                      dose: m.dose,
+                      frequency: m.frequency,
+                      scheduledTimes: m.scheduledTimes,
+                      notifyMinutesBefore: m.notifyMinutesBefore,
+                      active: m.active,
+                      isStrict: m.isStrict ?? false,
+                      createdAt: m.createdAt || new Date().toISOString(),
+                      startDate: m.startDate ? m.startDate.split('T')[0] : getTodayStr(),
+                      endDate: m.endDate ? m.endDate.split('T')[0] : undefined,
+                    }));
+                    const { useMedicationStore } = await import("./medicationStore");
+                    useMedicationStore.getState().addServerMedications(mappedMeds);
+                  }
+                } catch (medErr) {
+                  console.warn("Failed to load medications:", medErr);
+                }
+
+                try {
+                  const today = getTodayStr();
+                  const glucoseData = await apiRequest(`/pets/${targetPetId}/glucose?date=${today}`);
+                  if (glucoseData && Array.isArray(glucoseData)) {
+                    const mapped = glucoseData.map((r: any) => ({
+                      id: r.id,
+                      timestamp: r.recordedAt,
+                      value: r.value,
+                      unit: r.unit || 'mg/dL',
+                      trend: r.trend,
+                      isHigh: r.isHigh,
+                      isLow: r.isLow,
+                      source: r.source,
+                    }));
+                    const { useRegistryStore } = await import("./registryStore");
+                    useRegistryStore.getState().addServerGlucoseReadings(mapped);
+                  }
+                } catch (glucoseErr) {
+                  console.warn("Failed to load glucose readings:", glucoseErr);
+                }
+
+                localStorage.removeItem(`last_sync_time_${targetPetId}`);
               } else {
                 set({ currentPet: null, sensorStatus: null });
               }
@@ -590,10 +684,8 @@ export const useAppStore = create<AppState>()(
         showEventsOnChart: state.showEventsOnChart,
         notificationPermission: state.notificationPermission,
         customInsulinTypes: state.customInsulinTypes,
-        caregivers: state.caregivers,
         currentCaregiverId: state.currentCaregiverId,
         isAdminLoggedIn: state.isAdminLoggedIn,
-        adminPassword: state.adminPassword,
         sensorStatus: state.sensorStatus,
         pets: state.pets,
         currentPet: state.currentPet,

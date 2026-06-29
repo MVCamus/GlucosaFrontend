@@ -1,22 +1,27 @@
 import { useMemo } from "react";
-import { Syringe, UtensilsCrossed } from "lucide-react";
+import { Syringe, UtensilsCrossed, Trash2 } from "lucide-react";
 import { useGlucoseStore } from "../../stores/glucoseStore";
 import { useRegistryStore } from "../../stores/registryStore";
 import { formatTime, getLocalDateStr } from "../../utils/date";
 import { getInsulinLabel } from "../../types/insulin";
-import { MOCK_INSULIN_RECORDS } from "../../mocks/insulin";
-import { MOCK_FOOD_RECORDS } from "../../mocks/food";
-import { MOCK_GLUCOSE_READINGS } from "../../mocks/glucose";
 import type { GlucoseReading } from "../../types/glucose";
 
-const MOCK_DATA_DATE = "2026-06-03";
-
 interface EventRow {
+  id: string;
   icon: React.ReactNode;
   eventTime: string;
   eventDetail: string;
+  caregiver: string;
   lastGlucose: number | null;
   lastGlucoseTime: string | null;
+  deletable: boolean;
+  deleteFn: () => void;
+}
+
+function extractGlucoseFromNotes(notes?: string | null): number | null {
+  if (!notes) return null;
+  const match = notes.match(/\[Glucosa:\s*(\d+)\s*mg\/dL\]/);
+  return match ? parseInt(match[1], 10) : null;
 }
 
 function getLastReadingBefore(
@@ -36,42 +41,51 @@ export default function EventGlucoseSummary() {
   const uReadings = useRegistryStore((s) => s.glucoseRecords);
   const uInsulin = useRegistryStore((s) => s.insulinRecords);
   const uFood = useRegistryStore((s) => s.foodRecords);
+  const deleteInsulin = useRegistryStore((s) => s.deleteInsulin);
+  const deleteFood = useRegistryStore((s) => s.deleteFood);
 
   const rows = useMemo(() => {
     const result: EventRow[] = [];
-    const allReadings = [
-      ...uReadings.filter((r) => getLocalDateStr(r.timestamp) === selectedDate),
-      ...(selectedDate === MOCK_DATA_DATE ? MOCK_GLUCOSE_READINGS : []),
-    ].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    const allReadings = uReadings
+      .filter((r) => getLocalDateStr(r.timestamp) === selectedDate)
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
-    const insulinEvts = [
-      ...uInsulin.filter((r) => getLocalDateStr(r.timestamp) === selectedDate),
-      ...(selectedDate === MOCK_DATA_DATE ? MOCK_INSULIN_RECORDS : []),
-    ];
-    const foodEvts = [
-      ...uFood.filter((r) => getLocalDateStr(r.timestamp) === selectedDate),
-      ...(selectedDate === MOCK_DATA_DATE ? MOCK_FOOD_RECORDS : []),
-    ];
+    const insulinEvts = uInsulin.filter((r) => getLocalDateStr(r.timestamp) === selectedDate);
+    const foodEvts = uFood.filter((r) => getLocalDateStr(r.timestamp) === selectedDate);
 
     insulinEvts.forEach((e) => {
-      const last = getLastReadingBefore(e.timestamp, allReadings);
+      const manualGlucose = extractGlucoseFromNotes(e.notes);
+      const last = manualGlucose !== null
+        ? { value: manualGlucose, time: formatTime(e.timestamp) }
+        : getLastReadingBefore(e.timestamp, allReadings);
       result.push({
+        id: e.id,
         icon: <Syringe size={14} className="text-blue-500" />,
         eventTime: formatTime(e.timestamp),
-        eventDetail: `${e.units}U ${getInsulinLabel(e.insulinType)} — ${e.caregiverName}`,
+        eventDetail: `${e.units}U ${getInsulinLabel(e.insulinType)}`,
+        caregiver: e.caregiverName || "—",
         lastGlucose: last?.value ?? null,
         lastGlucoseTime: last?.time ?? null,
+        deletable: true,
+        deleteFn: () => { if (confirm("¿Eliminar esta dosis de insulina?")) deleteInsulin(e.id); },
       });
     });
 
     foodEvts.forEach((e) => {
-      const last = getLastReadingBefore(e.timestamp, allReadings);
+      const manualGlucose = extractGlucoseFromNotes(e.notes);
+      const last = manualGlucose !== null
+        ? { value: manualGlucose, time: formatTime(e.timestamp) }
+        : getLastReadingBefore(e.timestamp, allReadings);
       result.push({
+        id: e.id,
         icon: <UtensilsCrossed size={14} className="text-green-500" />,
         eventTime: formatTime(e.timestamp),
-        eventDetail: `${e.foodType} — ${e.quantity} — ${e.caregiverName}`,
+        eventDetail: `${e.foodType} — ${e.quantity}`,
+        caregiver: e.caregiverName || "—",
         lastGlucose: last?.value ?? null,
         lastGlucoseTime: last?.time ?? null,
+        deletable: true,
+        deleteFn: () => { if (confirm("¿Eliminar esta comida?")) deleteFood(e.id); },
       });
     });
 
@@ -96,10 +110,11 @@ export default function EventGlucoseSummary() {
           <div key={i} className="flex items-center gap-3 py-2 border-b border-gray-50 last:border-0">
             <div className="flex-shrink-0">{r.icon}</div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 text-sm">
+              <div className="flex items-center gap-2 text-sm flex-wrap">
                 <span className="font-semibold text-gray-700">{r.eventTime}</span>
-                <span className="text-gray-500 truncate">{r.eventDetail}</span>
+                <span className="text-gray-500 break-words">{r.eventDetail}</span>
               </div>
+              <p className="text-xs text-gray-400">{r.caregiver}</p>
             </div>
             <div className="text-right flex-shrink-0">
               {r.lastGlucose !== null ? (
@@ -113,9 +128,17 @@ export default function EventGlucoseSummary() {
                   )}
                 </>
               ) : (
-                <span className="text-xs text-gray-400">Sin lectura previa</span>
+                <span className="text-xs text-gray-400">Sin lectura</span>
               )}
             </div>
+            {r.deletable && (
+              <button
+                onClick={r.deleteFn}
+                className="flex-shrink-0 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
           </div>
         ))}
       </div>

@@ -4,6 +4,7 @@ import { useAppStore } from "../stores/appStore";
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import type { LocalNotificationSchema } from "@capacitor/local-notifications";
+import { getTodayStr, getLocalDateStr } from "../utils/date";
 
 export function useMedNotifications() {
   const medications = useMedicationStore((s) => s.medications);
@@ -56,9 +57,9 @@ export function useMedNotifications() {
               const scheduled = new Date();
               scheduled.setHours(hours, minutes - med.notifyMinutesBefore, 0, 0);
 
-              const todayStr = now.toISOString().split("T")[0];
+              const todayStr = getTodayStr();
               const isAlreadyGivenToday = logs.some(
-                (l) => l.medicationId === med.id && l.scheduledTime === time && l.givenAt.startsWith(todayStr)
+                (l) => l.medicationId === med.id && l.scheduledTime === time && getLocalDateStr(l.givenAt) === todayStr
               );
 
               // If it already passed or was given today, start from tomorrow
@@ -125,9 +126,9 @@ export function useMedNotifications() {
         const scheduled = new Date();
         scheduled.setHours(hours, minutes - med.notifyMinutesBefore, 0, 0);
 
-        const todayStr = now.toISOString().split("T")[0];
+        const todayStr = getTodayStr();
         const isAlreadyGivenToday = logs.some(
-          (l) => l.medicationId === med.id && l.scheduledTime === time && l.givenAt.startsWith(todayStr)
+          (l) => l.medicationId === med.id && l.scheduledTime === time && getLocalDateStr(l.givenAt) === todayStr
         );
 
         if (isAlreadyGivenToday) return;

@@ -4,6 +4,7 @@ import { useAppStore } from "../../stores/appStore";
 import MedCheckButton from "./MedCheckButton";
 import type { MedicationWithSlots } from "../../utils/medSlots";
 import { getMinutesLate, formatMinutesLate, getMedicationWarning } from "../../utils/medSlots";
+import { getTodayStr } from "../../utils/date";
 
 interface Props {
   group: MedicationWithSlots;
@@ -28,7 +29,11 @@ export default function MedicationCard({ group, isAllGiven, onEdit }: Props) {
   const currentUser = useAppStore((s) => s.currentCaregiver());
 
   const handleMark = async (scheduledTime: string) => {
-    if (!currentUser) return;
+    console.log("handleMark triggered. currentUser:", currentUser, "medicationId:", medication.id, "time:", scheduledTime);
+    if (!currentUser) {
+      console.warn("handleMark aborted: currentUser is null or undefined!");
+      return;
+    }
     await markGiven(medication.id, scheduledTime, currentUser.id, currentUser.name);
     addToast({ message: `${medication.name} — ${scheduledTime} registrado`, type: "success" });
   };
@@ -45,7 +50,7 @@ export default function MedicationCard({ group, isAllGiven, onEdit }: Props) {
     }
   };
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = getTodayStr();
 
   return (
     <div className={`bg-white border border-gray-100 rounded-xl p-4 shadow-sm transition-opacity ${isAllGiven ? "opacity-50" : ""}`}>

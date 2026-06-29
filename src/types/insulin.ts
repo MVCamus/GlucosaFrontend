@@ -6,6 +6,7 @@ export interface InsulinRecord {
   caregiverId: string;
   caregiverName: string;
   notes?: string;
+  synced?: boolean;
 }
 
 export type InsulinType = string;

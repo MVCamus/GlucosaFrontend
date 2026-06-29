@@ -1,4 +1,5 @@
 import type { Medication, MedicationLog, MedDailySlot } from "../types/medication";
+import { getLocalDateStr } from "./date";
 
 export interface MedicationWithSlots {
   medication: Medication;
@@ -70,7 +71,7 @@ function getShiftedTimeForSlotInternal(
     (l) =>
       l.medicationId === med.id &&
       l.scheduledTime === slotTime &&
-      l.givenAt.startsWith(targetDateStr)
+      getLocalDateStr(l.givenAt) === targetDateStr
   );
   if (logForThisSlot) {
     return new Date(logForThisSlot.givenAt);
@@ -175,7 +176,7 @@ export function computeDailySlots(
     return true;
   });
 
-  const getLogsForDate = (d: string) => logs.filter((l) => l.givenAt.startsWith(d));
+  const getLogsForDate = (d: string) => logs.filter((l) => getLocalDateStr(l.givenAt) === d);
   const dayLogs = getLogsForDate(date);
   const now = new Date();
   const [todayYear, todayMonth, todayDay] = date.split("-").map(Number);

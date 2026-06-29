@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Droplets, Clock, UserCheck, TrendingUp } from "lucide-react";
+import { Droplets, Clock, UserCheck } from "lucide-react";
 import { useRegistryStore } from "../../stores/registryStore";
 import { useAppStore } from "../../stores/appStore";
 import { getTodayStr } from "../../utils/date";
@@ -28,10 +28,12 @@ export default function GlucoseForm() {
     const now = new Date();
     return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   });
+  const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser || value <= 0) return;
+    setSubmitting(true);
 
     let timestamp: string;
     if (useCurrentTime) {
@@ -41,6 +43,7 @@ export default function GlucoseForm() {
       const localDateTime = new Date(`${customDate}T${customTime}:00`);
       if (isNaN(localDateTime.getTime())) {
         addToast({ message: "Fecha u hora inválida", type: "error" });
+        setSubmitting(false);
         return;
       }
       timestamp = localDateTime.toISOString();
@@ -49,22 +52,28 @@ export default function GlucoseForm() {
     const lowLimit = useAppStore.getState().currentPet?.targetLow ?? 70;
     const highLimit = useAppStore.getState().currentPet?.targetHigh ?? 250;
 
-    await submitGlucose({
-      timestamp,
-      value,
-      unit: "mg/dL",
-      trend,
-      isHigh: value > highLimit,
-      isLow: value < lowLimit,
-      source: "manual",
-    });
+    try {
+      await submitGlucose({
+        timestamp,
+        value,
+        unit: "mg/dL",
+        trend,
+        isHigh: value > highLimit,
+        isLow: value < lowLimit,
+        source: "manual",
+      });
 
-    addToast({ message: "Glucosa registrada manualmente", type: "success" });
-    
-    // Reset form states except date
-    if (useCurrentTime) {
-      const now = new Date();
-      setCustomTime(`${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`);
+      addToast({ message: "Glucosa registrada manualmente", type: "success" });
+      
+      // Reset form states except date
+      if (useCurrentTime) {
+        const now = new Date();
+        setCustomTime(`${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`);
+      }
+    } catch (err) {
+      addToast({ message: "Error al registrar glucosa", type: "error" });
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -172,9 +181,10 @@ export default function GlucoseForm() {
 
       <button
         type="submit"
-        className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded-xl transition-colors mt-4"
+        disabled={submitting}
+        className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors mt-4"
       >
-        Registrar Glucosa
+        {submitting ? "Registrando..." : "Registrar Glucosa"}
       </button>
     </form>
   );

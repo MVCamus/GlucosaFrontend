@@ -80,14 +80,12 @@ export default function OnboardingTour() {
       element.scrollIntoView({ behavior: "smooth", block: "center" });
 
       const rect = element.getBoundingClientRect();
-      const scrollY = window.scrollY;
-      const scrollX = window.scrollX;
       const padding = 8;
 
       setHighlightStyle({
-        position: "absolute",
-        top: rect.top + scrollY - padding,
-        left: rect.left + scrollX - padding,
+        position: "fixed",
+        top: rect.top - padding,
+        left: rect.left - padding,
         width: rect.width + padding * 2,
         height: rect.height + padding * 2,
         boxShadow: "0 0 0 9999px rgba(15, 23, 42, 0.75)",
@@ -100,31 +98,30 @@ export default function OnboardingTour() {
       // Calculate tooltip position
       const tooltipWidth = Math.min(320, window.innerWidth - 32);
       const estimatedHeight = 185;
-      let top = rect.bottom + scrollY + 16;
-      let left = rect.left + scrollX + (rect.width - tooltipWidth) / 2;
+      let top = rect.bottom + 16;
+      let left = rect.left + (rect.width - tooltipWidth) / 2;
 
       // Adjust for placements
       if (step.placement === "top") {
-        top = rect.top + scrollY - estimatedHeight - 16;
+        top = rect.top - estimatedHeight - 16;
       }
 
       // Check if it goes off the bottom of the screen (e.g. covered by bottom nav)
-      // Bottom nav is at window.innerHeight + scrollY. It occupies ~80px.
-      const maxTop = window.innerHeight + scrollY - estimatedHeight - 95; // 95px safety margin
+      const maxTop = window.innerHeight - estimatedHeight - 95; // 95px safety margin
       if (top > maxTop) {
         // If it goes too low, try placing it above the element
-        top = rect.top + scrollY - estimatedHeight - 16;
+        top = rect.top - estimatedHeight - 16;
       }
 
       // Keep tooltip within top/vertical bounds
       const margin = 16;
-      if (top < scrollY + margin) {
+      if (top < margin) {
         // If it is too high, place it below the element
-        top = rect.bottom + scrollY + 16;
+        top = rect.bottom + 16;
         
         // If it still goes off the bottom, force it to be at the top of the viewport
         if (top > maxTop) {
-          top = scrollY + margin + 10;
+          top = margin + 10;
         }
       }
 
@@ -132,7 +129,7 @@ export default function OnboardingTour() {
       left = Math.max(margin, Math.min(left, window.innerWidth - tooltipWidth - margin));
 
       setTooltipStyle({
-        position: "absolute",
+        position: "fixed",
         top,
         left,
         width: `${tooltipWidth}px`,
@@ -173,10 +170,7 @@ export default function OnboardingTour() {
   };
 
   return (
-    <div className="absolute top-0 left-0 w-full min-h-full overflow-hidden pointer-events-auto z-[99997]">
-      {/* Background overlay blocker intercepting all clicks outside tooltip */}
-      <div className="fixed inset-0 z-[99996] pointer-events-auto bg-transparent" />
-
+    <div className="fixed inset-0 overflow-hidden pointer-events-auto z-[99997] bg-slate-900/75">
       {/* Spotlight highlight */}
       <div style={highlightStyle} />
 

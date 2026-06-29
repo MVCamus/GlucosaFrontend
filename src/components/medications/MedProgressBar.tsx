@@ -1,13 +1,14 @@
 import { useMemo } from "react";
 import { useMedicationStore } from "../../stores/medicationStore";
 import { computeDailySlots } from "../../utils/medSlots";
+import { getTodayStr } from "../../utils/date";
 
 export default function MedProgressBar() {
   const medications = useMedicationStore((s: any) => s.medications);
   const logs = useMedicationStore((s: any) => s.logs);
 
   const { given, total } = useMemo(() => {
-    const today = new Date().toISOString().split("T")[0];
+    const today = getTodayStr();
     const slots = computeDailySlots(medications, logs, today);
     return {
       given: slots.filter((s) => s.status === "given").length,

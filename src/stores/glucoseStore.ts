@@ -3,8 +3,7 @@ import type { DailySummary, NadirResult } from "../types/dashboard";
 import type { GlucoseReading } from "../types/glucose";
 import { useRegistryStore } from "./registryStore";
 import { getTodayStr, getLocalDateStr } from "../utils/date";
-
-const today = getTodayStr();
+import { calculateNadir as calculateNadirFromData } from "../utils/nadir";
 
 interface GlucoseState {
   dailySummary: DailySummary | null;
@@ -29,14 +28,14 @@ function buildSummary(date: string): DailySummary {
     glucoseReadings: allReadings,
     insulinRecords: userInsulin,
     foodRecords: userFood,
-    nadir: null,
+    nadir: calculateNadirFromData(allReadings, userInsulin),
   };
 }
 
 export const useGlucoseStore = create<GlucoseState>((set, get) => ({
-  dailySummary: buildSummary(today),
+  dailySummary: buildSummary(getTodayStr()),
   isLoading: false,
-  selectedDate: today,
+  selectedDate: getTodayStr(),
 
   loadDay: (date: string) => {
     set({ isLoading: true });
@@ -62,3 +61,11 @@ export const useGlucoseStore = create<GlucoseState>((set, get) => ({
     return state.dailySummary.nadir;
   },
 }));
+
+useRegistryStore.subscribe(() => {
+  const state = useGlucoseStore.getState();
+  const dateStr = getTodayStr();
+  if (state.selectedDate === dateStr) {
+    useGlucoseStore.getState().loadDay(dateStr);
+  }
+});

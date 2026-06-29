@@ -10,6 +10,7 @@ export interface Medication {
   createdAt: string;
   startDate: string;
   endDate?: string;
+  synced?: boolean;
 }
 
 export type MedFrequency = "once" | "twice" | "three_times" | "custom";
@@ -22,6 +23,7 @@ export interface MedicationLog {
   givenAt: string;
   caregiverId: string;
   caregiverName: string;
+  synced?: boolean;
 }
 
 export interface MedDailySlot {

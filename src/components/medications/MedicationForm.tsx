@@ -3,6 +3,8 @@ import { X, Plus, Minus } from "lucide-react";
 import { useMedicationStore } from "../../stores/medicationStore";
 import { useAppStore } from "../../stores/appStore";
 import type { MedFrequency } from "../../types/medication";
+import { getTodayStr } from "../../utils/date";
+import { Capacitor } from "@capacitor/core";
 
 interface Props {
   onClose: () => void;
@@ -43,12 +45,13 @@ export default function MedicationForm({ onClose }: Props) {
     editingMedication?.notifyMinutesBefore ?? 30
   );
   const [startDate, setStartDate] = useState<string>(
-    editingMedication?.startDate || new Date().toISOString().split("T")[0]
+    editingMedication?.startDate || getTodayStr()
   );
   const [endDate, setEndDate] = useState<string>(
     editingMedication?.endDate || ""
   );
   const [isStrict, setIsStrict] = useState<boolean>(editingMedication?.isStrict || false);
+  const [submitting, setSubmitting] = useState(false);
 
   const handleFrequencyChange = (freq: MedFrequency) => {
     setFrequency(freq);
@@ -69,15 +72,33 @@ export default function MedicationForm({ onClose }: Props) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !dose.trim() || scheduledTimes.length === 0) return;
+    setSubmitting(true);
 
-    if (editingMedication) {
-      await updateMedication(editingMedication.id, { name, dose, frequency, scheduledTimes, notifyMinutesBefore, isStrict, startDate, endDate: endDate || undefined });
-      addToast({ message: "Remedio actualizado", type: "success" });
-    } else {
-      await addMedication({ name, dose, frequency, scheduledTimes, notifyMinutesBefore, active: true, isStrict, startDate, endDate: endDate || undefined });
-      addToast({ message: "Remedio agregado", type: "success" });
+    try {
+      if (Capacitor.isNativePlatform()) {
+        try {
+          const currentPerm = useAppStore.getState().notificationPermission;
+          if (currentPerm !== "granted") {
+            await useAppStore.getState().requestNotificationPermission();
+          }
+        } catch (err) {
+          console.error("Failed to request notification permission:", err);
+        }
+      }
+
+      if (editingMedication) {
+        await updateMedication(editingMedication.id, { name, dose, frequency, scheduledTimes, notifyMinutesBefore, isStrict, startDate, endDate: endDate || undefined });
+        addToast({ message: "Remedio actualizado", type: "success" });
+      } else {
+        await addMedication({ name, dose, frequency, scheduledTimes, notifyMinutesBefore, active: true, isStrict, startDate, endDate: endDate || undefined });
+        addToast({ message: "Remedio agregado", type: "success" });
+      }
+      onClose();
+    } catch (err) {
+      addToast({ message: "Error al guardar el remedio", type: "error" });
+    } finally {
+      setSubmitting(false);
     }
-    onClose();
   };
 
   return (
@@ -201,7 +222,7 @@ export default function MedicationForm({ onClose }: Props) {
                 />
               </div>
             </div>
-            {endDate && endDate < new Date().toISOString().split("T")[0] && (
+            {endDate && endDate < getTodayStr() && (
               <p className="text-xs text-amber-500 mt-1">Este remedio ya finalizó. No aparecerá como pendiente.</p>
             )}
           </div>
@@ -225,8 +246,8 @@ export default function MedicationForm({ onClose }: Props) {
             <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-semibold hover:bg-gray-50 transition-colors">
               Cancelar
             </button>
-            <button type="submit" className="flex-1 py-3 rounded-xl bg-purple-500 text-white font-semibold hover:bg-purple-600 transition-colors">
-              {editingMedication ? "Guardar cambios" : "Agregar remedio"}
+            <button type="submit" disabled={submitting} className="flex-1 py-3 rounded-xl bg-purple-500 text-white font-semibold hover:bg-purple-600 disabled:opacity-50 transition-colors">
+              {submitting ? "Guardando..." : (editingMedication ? "Guardar cambios" : "Agregar remedio")}
             </button>
           </div>
         </form>

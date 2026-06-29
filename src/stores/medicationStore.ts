@@ -3,7 +3,7 @@ import { persist } from "zustand/middleware";
 import type { Medication, MedicationLog, MedDailySlot, MedSlotStatus } from "../types/medication";
 import { getShiftedTimeForSlot } from "../utils/medSlots";
 import { useAppStore } from "./appStore";
-import { getLocalDateStr } from "../utils/date";
+import { getLocalDateStr, getTodayStr } from "../utils/date";
 
 interface MedicationState {
   medications: Medication[];
@@ -22,6 +22,8 @@ interface MedicationState {
   closeForm: () => void;
   addServerMedications: (meds: Medication[]) => void;
   addServerMedicationLogs: (logs: MedicationLog[]) => void;
+  getUnsyncedMedications: () => Medication[];
+  getUnsyncedLogs: () => MedicationLog[];
 }
 
 export const useMedicationStore = create<MedicationState>()(
@@ -38,6 +40,7 @@ export const useMedicationStore = create<MedicationState>()(
           ...med,
           id: tempId,
           createdAt: new Date().toISOString(),
+          synced: false,
         };
         set((state) => ({ medications: [...state.medications, newMed] }));
 
@@ -62,7 +65,7 @@ export const useMedicationStore = create<MedicationState>()(
             });
             if (saved?.id) {
               set((s) => ({
-                medications: s.medications.map((m) => m.id === tempId ? { ...m, id: saved.id } : m)
+                medications: s.medications.map((m) => m.id === tempId ? { ...m, id: saved.id, synced: true } : m)
               }));
             }
           } catch (err) {
@@ -78,7 +81,9 @@ export const useMedicationStore = create<MedicationState>()(
           ),
         }));
 
-        const petId = useAppStore.getState().currentPet?.id || 'any';
+        const petId = useAppStore.getState().currentPet?.id;
+        if (!petId) return;
+
         if (localStorage.getItem('jwt_token') && !id.startsWith("m-")) {
           try {
             const { apiRequest } = await import("../utils/api");
@@ -93,20 +98,26 @@ export const useMedicationStore = create<MedicationState>()(
       },
 
       deactivateMedication: async (id) => {
-        set((state) => ({
-          medications: state.medications.filter((m) => m.id !== id),
-        }));
+        const petId = useAppStore.getState().currentPet?.id;
+        if (!petId) return;
 
-        const petId = useAppStore.getState().currentPet?.id || 'any';
         if (localStorage.getItem('jwt_token') && !id.startsWith("m-")) {
           try {
             const { apiRequest } = await import("../utils/api");
             await apiRequest(`/pets/${petId}/medications/${id}`, {
               method: "DELETE"
             });
+            set((state) => ({
+              medications: state.medications.filter((m) => m.id !== id),
+            }));
           } catch (err) {
             console.error("Failed to delete medication on backend:", err);
+            useAppStore.getState().addToast({ message: "Error al eliminar el remedio", type: "error" });
           }
+        } else {
+          set((state) => ({
+            medications: state.medications.filter((m) => m.id !== id),
+          }));
         }
       },
 
@@ -123,10 +134,13 @@ export const useMedicationStore = create<MedicationState>()(
           givenAt: new Date().toISOString(),
           caregiverId,
           caregiverName,
+          synced: false,
         };
         set((state) => ({ logs: [...state.logs, newLog] }));
 
-        const petId = useAppStore.getState().currentPet?.id || 'any';
+        const petId = useAppStore.getState().currentPet?.id;
+        if (!petId) return;
+
         if (localStorage.getItem('jwt_token') && !medicationId.startsWith("m-")) {
           try {
             const { apiRequest } = await import("../utils/api");
@@ -142,7 +156,7 @@ export const useMedicationStore = create<MedicationState>()(
             });
             if (saved?.id) {
               set((s) => ({
-                logs: s.logs.map((l) => l.id === tempId ? { ...l, id: saved.id } : l)
+                logs: s.logs.map((l) => l.id === tempId ? { ...l, id: saved.id, synced: true } : l)
               }));
             }
           } catch (err) {
@@ -154,20 +168,27 @@ export const useMedicationStore = create<MedicationState>()(
       unmarkGiven: async (logId) => {
         const state = get();
         const log = state.logs.find((l) => l.id === logId);
-        set((state) => ({
-          logs: state.logs.filter((l) => l.id !== logId),
-        }));
 
-        const petId = useAppStore.getState().currentPet?.id || 'any';
+        const petId = useAppStore.getState().currentPet?.id;
+        if (!petId) return;
+
         if (log && localStorage.getItem('jwt_token') && !logId.startsWith("ml-")) {
           try {
             const { apiRequest } = await import("../utils/api");
             await apiRequest(`/pets/${petId}/medications/logs/${logId}`, {
               method: "DELETE"
             });
+            set((state) => ({
+              logs: state.logs.filter((l) => l.id !== logId),
+            }));
           } catch (err) {
             console.error("Failed to delete medication log on backend:", err);
+            useAppStore.getState().addToast({ message: "Error al desmarcar el remedio", type: "error" });
           }
+        } else {
+          set((state) => ({
+            logs: state.logs.filter((l) => l.id !== logId),
+          }));
         }
       },
 
@@ -217,7 +238,7 @@ export const useMedicationStore = create<MedicationState>()(
       },
 
       getTodayProgress: () => {
-        const today = new Date().toISOString().split("T")[0];
+        const today = getTodayStr();
         const slots = get().getDailySlots(today);
         const given = slots.filter((s) => s.status === "given").length;
         return { given, total: slots.length };
@@ -255,6 +276,14 @@ export const useMedicationStore = create<MedicationState>()(
             logs: [...state.logs, ...filteredLogs],
           };
         });
+      },
+
+      getUnsyncedMedications: () => {
+        return get().medications.filter((m) => m.synced === false);
+      },
+
+      getUnsyncedLogs: () => {
+        return get().logs.filter((l) => l.synced === false);
       },
     }),
     {
