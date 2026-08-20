@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type { DailySummary, NadirResult } from "../types/dashboard";
 import type { GlucoseReading } from "../types/glucose";
 import { useRegistryStore } from "./registryStore";
-import { getTodayStr, getLocalDateStr } from "../utils/date";
+import { getTodayStr, getLocalDateStr, formatChile } from "../utils/date";
 import { calculateNadir as calculateNadirFromData } from "../utils/nadir";
 
 interface GlucoseState {
@@ -50,7 +50,7 @@ export const useGlucoseStore = create<GlucoseState>((set, get) => ({
     const state = get();
     if (!state.dailySummary) return [];
     return state.dailySummary.glucoseReadings.map((r: GlucoseReading) => ({
-      time: new Date(r.timestamp).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
+      time: formatChile(r.timestamp, "HH:mm"),
       glucose: r.value,
     }));
   },

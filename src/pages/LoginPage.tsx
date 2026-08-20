@@ -1,8 +1,12 @@
 import { useState } from "react";
-import { Dog, Lock, LogIn, Shield } from "lucide-react";
+import { Dog, Lock, LogIn, Shield, UserPlus } from "lucide-react";
 import { useAppStore } from "../stores/appStore";
 
-export default function LoginPage() {
+interface Props {
+  onGoSignup?: () => void;
+}
+
+export default function LoginPage({ onGoSignup }: Props = {}) {
   const caregivers = useAppStore((s) => s.caregivers);
   const login = useAppStore((s) => s.login);
   const adminLogin = useAppStore((s) => s.adminLogin);
@@ -38,12 +42,17 @@ export default function LoginPage() {
         return;
       }
 
-      const success = await login(identifier, password);
-      if (success) {
-        const name = isManual ? identifier : (caregivers.find((c) => c.id === selectedId)?.name || identifier);
-        addToast({ message: `Bienvenido, ${name}`, type: "success" });
-      } else {
-        addToast({ message: "Contraseña incorrecta", type: "error" });
+      try {
+        const success = await login(identifier, password);
+        if (success) {
+          const name = isManual ? identifier : (caregivers.find((c) => c.id === selectedId)?.name || identifier);
+          addToast({ message: `Bienvenido, ${name}`, type: "success" });
+        } else {
+          addToast({ message: "Credenciales inválidas o contraseña incorrecta", type: "error" });
+        }
+      } catch (err: any) {
+        const msg = err?.message || "No se pudo iniciar sesión. Verifica tus datos";
+        addToast({ message: msg, type: "error" });
       }
     } finally {
       setSubmitting(false);
@@ -145,6 +154,16 @@ export default function LoginPage() {
               <LogIn size={18} />
               {submitting ? "Entrando..." : "Entrar"}
             </button>
+
+            {onGoSignup && (
+              <button
+                type="button"
+                onClick={onGoSignup}
+                className="w-full text-sm text-orange-600 hover:underline flex items-center justify-center gap-1"
+              >
+                <UserPlus size={14} /> Crear cuenta nueva
+              </button>
+            )}
           </div>
         </div>
       </div>

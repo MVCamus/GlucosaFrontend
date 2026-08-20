@@ -1,5 +1,5 @@
 import type { Medication, MedicationLog, MedDailySlot } from "../types/medication";
-import { getLocalDateStr } from "./date";
+import { getLocalDateStr, getTodayStr, formatChile } from "./date";
 
 export interface MedicationWithSlots {
   medication: Medication;
@@ -7,11 +7,22 @@ export interface MedicationWithSlots {
 }
 
 export function getMinutesLate(scheduledTime: string, dateStr: string): number {
+  const today = getTodayStr();
+  if (dateStr > today) return 0; // Día futuro, no puede estar atrasado
+
   const [sh, sm] = scheduledTime.split(":").map(Number);
-  const now = new Date();
-  const [year, month, day] = dateStr.split("-").map(Number);
-  const scheduledDate = new Date(year, month - 1, day, sh, sm);
-  const diffMin = Math.floor((now.getTime() - scheduledDate.getTime()) / 60000);
+  const scheduledMins = sh * 60 + sm;
+
+  const nowChile = formatChile(new Date(), "HH:mm");
+  const [curH, curM] = nowChile.split(":").map(Number);
+  const currentMins = curH * 60 + curM;
+
+  if (dateStr < today) {
+    // Día pasado sin dar
+    return 1440 - scheduledMins + currentMins;
+  }
+
+  const diffMin = currentMins - scheduledMins;
   return diffMin > 0 ? diffMin : 0;
 }
 
@@ -178,38 +189,54 @@ export function computeDailySlots(
 
   const getLogsForDate = (d: string) => logs.filter((l) => getLocalDateStr(l.givenAt) === d);
   const dayLogs = getLogsForDate(date);
-  const now = new Date();
-  const [todayYear, todayMonth, todayDay] = date.split("-").map(Number);
   
+  const todayStr = getTodayStr();
+  const nowChile = formatChile(new Date(), "HH:mm");
+  const [curH, curM] = nowChile.split(":").map(Number);
+  const currentMins = curH * 60 + curM;
+  
+  // Ventana de cortesía: 45 minutos después de la hora programada antes de marcar atrasado
+  const COURTESY_WINDOW_MINS = 45;
+
   return activeMeds.flatMap((med) => {
     const sortedTimes = getSortedTimes(med.scheduledTimes);
     return sortedTimes.map((scheduledTime) => {
-      const log = dayLogs.find(
-        (l) => l.medicationId === med.id && l.scheduledTime === scheduledTime
-      );
-      let status: "pending" | "given" | "overdue" = "pending";
-      
-      let slotDate: Date;
       let shiftedTime: string | undefined;
 
       if (med.isStrict) {
-        slotDate = getShiftedTimeForSlot(med, scheduledTime, date, logs);
+        const slotDate = getShiftedTimeForSlot(med, scheduledTime, date, logs);
         const h = String(slotDate.getHours()).padStart(2, "0");
         const m = String(slotDate.getMinutes()).padStart(2, "0");
         shiftedTime = `${h}:${m}`;
-      } else {
-        const [hours, minutes] = scheduledTime.split(":").map(Number);
-        slotDate = new Date(todayYear, todayMonth - 1, todayDay, hours, minutes);
       }
+
+      const effectiveTime = shiftedTime || scheduledTime;
+      const [slotH, slotM] = effectiveTime.split(":").map(Number);
+      const slotMins = slotH * 60 + slotM;
+
+      const log = dayLogs.find(
+        (l) => l.medicationId === med.id && (l.scheduledTime === scheduledTime || l.scheduledTime === effectiveTime)
+      );
+
+      let status: "pending" | "given" | "overdue" = "pending";
 
       if (log) {
         status = "given";
-      } else {
-        const diff = now.getTime() - slotDate.getTime();
-        if (diff > 30 * 60 * 1000) {
+      } else if (date < todayStr) {
+        // Día pasado y no se administró -> Atrasado/vencido
+        status = "overdue";
+      } else if (date === todayStr) {
+        // Día de hoy: solo atrasado si ya pasaron más de 45 minutos de la hora
+        if (currentMins - slotMins > COURTESY_WINDOW_MINS) {
           status = "overdue";
+        } else {
+          status = "pending";
         }
+      } else {
+        // Día futuro: siempre pendiente
+        status = "pending";
       }
+
       return { medication: med, scheduledTime, shiftedTime, status, log: log || null };
     });
   });

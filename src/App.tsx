@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import BottomNav from "./components/ui/BottomNav";
 import ToastContainer from "./components/ui/Toast";
 import ConnectivityBanner from "./components/ui/ConnectivityBanner";
@@ -11,6 +11,7 @@ import MedicationsPage from "./pages/MedicationsPage";
 import HistoryPage from "./pages/HistoryPage";
 import ReportsPage from "./pages/ReportsPage";
 import LoginPage from "./pages/LoginPage";
+import SignupPage from "./pages/SignupPage";
 import { useAppStore } from "./stores/appStore";
 import { useSync } from "./hooks/useSync";
 import { useMedNotifications } from "./hooks/useMedNotifications";
@@ -22,6 +23,7 @@ export default function App() {
   const currentCaregiverId = useAppStore((s) => s.currentCaregiverId);
   const isAdminLoggedIn = useAppStore((s) => s.isAdminLoggedIn);
   const fetchInitialData = useAppStore((s) => s.fetchInitialData);
+  const [authView, setAuthView] = useState<"login" | "signup">("login");
 
   // Habilitar la sincronización en segundo plano
   useSync();
@@ -86,7 +88,10 @@ export default function App() {
   }, [setOnline]);
 
   if (!currentCaregiverId && !isAdminLoggedIn) {
-    return <LoginPage />;
+    if (authView === "signup") {
+      return <SignupPage onBack={() => setAuthView("login")} />;
+    }
+    return <LoginPage onGoSignup={() => setAuthView("signup")} />;
   }
 
   return (

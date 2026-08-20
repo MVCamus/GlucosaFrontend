@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { AlertTriangle } from "lucide-react";
 import { useRegistryStore } from "../../stores/registryStore";
 import { getInsulinLabel } from "../../types/insulin";
+import { formatDateTime } from "../../utils/date";
 
 export default function CriticalAlertModal() {
   const isOpen = useRegistryStore((s) => s.isAlertModalOpen);
@@ -68,7 +69,7 @@ export default function CriticalAlertModal() {
         <p className="text-sm text-red-100 mb-1">Última dosis registrada:</p>
         <p className="font-bold">{currentAlert.lastDose.units} U — {getInsulinLabel(currentAlert.lastDose.insulinType)}</p>
         <p className="text-sm text-red-200">
-          {new Date(currentAlert.lastDose.timestamp).toLocaleString("es-CL")} por {currentAlert.lastDose.caregiverName}
+          {formatDateTime(currentAlert.lastDose.timestamp)} por {currentAlert.lastDose.caregiverName}
         </p>
       </div>
 

@@ -1,6 +1,7 @@
 import type { GlucoseReading } from "../types/glucose";
 import type { InsulinRecord } from "../types/insulin";
 import type { FoodRecord } from "../types/food";
+import { formatChile } from "./date";
 
 export interface ChartDataPoint {
   time: string;
@@ -10,7 +11,7 @@ export interface ChartDataPoint {
 
 export function formatReadingsForChart(readings: GlucoseReading[]): ChartDataPoint[] {
   return readings.map((r) => ({
-    time: new Date(r.timestamp).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
+    time: formatChile(r.timestamp, "HH:mm"),
     glucose: r.value,
     timestamp: r.timestamp,
   }));
@@ -18,7 +19,7 @@ export function formatReadingsForChart(readings: GlucoseReading[]): ChartDataPoi
 
 export function getInsulinMarkerPositions(insulinRecords: InsulinRecord[]) {
   return insulinRecords.map((r) => ({
-    time: new Date(r.timestamp).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
+    time: formatChile(r.timestamp, "HH:mm"),
     timestamp: r.timestamp,
     units: r.units,
     caregiverName: r.caregiverName,
@@ -28,7 +29,7 @@ export function getInsulinMarkerPositions(insulinRecords: InsulinRecord[]) {
 
 export function getFoodMarkerPositions(foodRecords: FoodRecord[]) {
   return foodRecords.map((r) => ({
-    time: new Date(r.timestamp).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
+    time: formatChile(r.timestamp, "HH:mm"),
     timestamp: r.timestamp,
     foodType: r.foodType,
     quantity: r.quantity,

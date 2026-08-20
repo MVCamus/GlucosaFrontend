@@ -43,7 +43,8 @@ interface AppState {
   addCustomInsulinType: (name: string) => void;
   removeCustomInsulinType: (name: string) => void;
   login: (caregiverIdOrName: string, password: string) => Promise<boolean>;
-  logout: () => void;
+  signup: (name: string, password: string) => Promise<boolean>;
+  logout: () => Promise<void>;
   currentCaregiver: () => Caregiver | null;
   addCaregiver: (caregiver: Omit<Caregiver, "id"> & { petId?: string }) => Promise<void>;
   updateCaregiver: (id: string, changes: Partial<Caregiver> & { petId?: string }) => Promise<void>;
@@ -207,6 +208,9 @@ export const useAppStore = create<AppState>()(
 
           if (response?.accessToken) {
             localStorage.setItem("jwt_token", response.accessToken);
+            if (response.refreshToken) {
+              localStorage.setItem("refresh_token", response.refreshToken);
+            }
             
             // Guardar o actualizar la info del cuidador en el estado local
             const caregiverData = response.caregiver;
@@ -237,13 +241,64 @@ export const useAppStore = create<AppState>()(
           }
         } catch (error) {
           console.error("Backend login failed:", error);
+          throw error;
         }
 
         return false;
       },
 
-      logout: () => {
+      signup: async (name, password) => {
+        try {
+          const { apiRequest } = await import("../utils/api");
+          const response = await apiRequest("/auth/signup", {
+            method: "POST",
+            body: JSON.stringify({ name, password }),
+          });
+
+          if (response?.accessToken) {
+            localStorage.setItem("jwt_token", response.accessToken);
+            if (response.refreshToken) {
+              localStorage.setItem("refresh_token", response.refreshToken);
+            }
+
+            const caregiverData = response.caregiver;
+            const caregiverObj = {
+              id: caregiverData.id,
+              name: caregiverData.name,
+              role: caregiverData.role,
+              petId: caregiverData.petId
+            };
+
+            set((s) => ({
+              currentCaregiverId: caregiverData.id,
+              caregivers: [...s.caregivers, caregiverObj],
+              isAdminLoggedIn: false,
+              hasToken: true
+            }));
+
+            await get().fetchInitialData();
+            await get().registerPushNotifications();
+            return true;
+          }
+        } catch (error) {
+          console.error("Backend signup failed:", error);
+          throw error;
+        }
+        return false;
+      },
+
+      logout: async () => {
+        const token = localStorage.getItem("jwt_token");
+        if (token) {
+          try {
+            const { apiRequest } = await import("../utils/api");
+            await apiRequest("/auth/logout", { method: "POST" });
+          } catch (e) {
+            console.warn("Logout backend call failed (continuing with local cleanup):", e);
+          }
+        }
         localStorage.removeItem("jwt_token");
+        localStorage.removeItem("refresh_token");
         localStorage.removeItem("app-storage");
         localStorage.removeItem("medication-storage");
         localStorage.removeItem("registry-storage");
@@ -346,6 +401,9 @@ export const useAppStore = create<AppState>()(
 
           if (response?.accessToken && response?.caregiver?.role === "admin") {
             localStorage.setItem("jwt_token", response.accessToken);
+            if (response.refreshToken) {
+              localStorage.setItem("refresh_token", response.refreshToken);
+            }
             set({ isAdminLoggedIn: true, currentCaregiverId: null, hasToken: true });
             await get().fetchInitialData();
             return true;

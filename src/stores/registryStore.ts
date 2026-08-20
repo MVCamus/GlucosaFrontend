@@ -166,8 +166,43 @@ export const useRegistryStore = create<RegistryState>()(
                 insulinRecords: s.insulinRecords.map((r) => r.id === tempId ? { ...r, id: saved.id, synced: true } : r)
               }));
             }
-          } catch (err) {
+          } catch (err: any) {
             console.error("Failed to push insulin to backend:", err);
+            if (err?.status === 409 && err?.details?.lastDose) {
+              // Remover el registro temporal creado localmente
+              set((s) => ({
+                insulinRecords: s.insulinRecords.filter((r) => r.id !== tempId)
+              }));
+
+              const serverLastDose: InsulinRecord = {
+                id: err.details.lastDose.id || 'server-last-dose',
+                units: err.details.lastDose.units,
+                insulinType: err.details.lastDose.insulinType,
+                timestamp: err.details.lastDose.administeredAt,
+                caregiverId: err.details.lastDose.caregiverId,
+                caregiverName: 'Otro cuidador',
+                synced: true,
+              };
+
+              const alert: CriticalAlert = {
+                id: `alert-${++alertCounter}`,
+                type: "double_dose",
+                timestamp: new Date().toISOString(),
+                lastDose: serverLastDose,
+                attemptedDose: record,
+                resolved: false,
+              };
+
+              set((s) => ({
+                alerts: [...s.alerts, alert],
+                isAlertModalOpen: true,
+                currentAlert: alert,
+                pendingInsulin: record,
+              }));
+
+              return { success: false, alert };
+            }
+            throw err;
           }
         }
 

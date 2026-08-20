@@ -3,6 +3,7 @@ import { UtensilsCrossed, Clock, UserCheck, Droplets } from "lucide-react";
 import { useRegistryStore } from "../../stores/registryStore";
 import { useAppStore } from "../../stores/appStore";
 import type { FoodType } from "../../types/food";
+import { formatChile } from "../../utils/date";
 
 const FOOD_TYPES: { value: FoodType; label: string }[] = [
   { value: "pellet", label: "Pellet" },
@@ -96,7 +97,7 @@ export default function FoodForm() {
           <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2.5">
             <Clock size={14} className="text-gray-500" />
             <span className="text-sm text-gray-700">
-              {new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })}
+              {formatChile(new Date(), "HH:mm")}
             </span>
             <span className="text-gray-400 text-xs">(automática)</span>
             <button

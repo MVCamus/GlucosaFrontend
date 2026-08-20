@@ -1,9 +1,11 @@
-import { ArrowLeft, Dog, Users, Activity, Syringe, Plus, X, LogOut, Shield, RefreshCw, WifiOff, HelpCircle, Play, BellRing } from "lucide-react";
+import { ArrowLeft, Dog, Users, Activity, Syringe, Plus, X, LogOut, Shield, RefreshCw, WifiOff, HelpCircle, Play, BellRing, Link2, Unlink, AlertTriangle } from "lucide-react";
 import { useAppStore } from "../stores/appStore";
+import { useLibreLinkStore } from "../stores/librelinkStore";
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import { getInsulinLabel } from "../types/insulin";
-import { useState } from "react";
+import { formatDateTime, formatDate } from "../utils/date";
+import { useState, useEffect } from "react";
 
 interface Props {
   onBack: () => void;
@@ -54,6 +56,54 @@ export default function SettingsPage({ onBack }: Props) {
   const [showNewSensor, setShowNewSensor] = useState(false);
   const [newSensorModel, setNewSensorModel] = useState("");
   const [newSensorSerial, setNewSensorSerial] = useState("");
+
+  const libreLinkStatus = useLibreLinkStore((s) => s.status);
+  const libreLinkLoading = useLibreLinkStore((s) => s.loading);
+  const libreLinkConnecting = useLibreLinkStore((s) => s.connecting);
+  const libreLinkError = useLibreLinkStore((s) => s.error);
+  const fetchLibreLinkStatus = useLibreLinkStore((s) => s.fetchStatus);
+  const connectLibreLink = useLibreLinkStore((s) => s.connect);
+  const disconnectLibreLink = useLibreLinkStore((s) => s.disconnect);
+
+  const [showLibreLinkForm, setShowLibreLinkForm] = useState(false);
+  const [libreEmail, setLibreEmail] = useState("");
+  const [librePassword, setLibrePassword] = useState("");
+
+  useEffect(() => {
+    if (currentPet?.id && (currentUser?.role === "owner" || currentUser?.role === "admin" || currentUser?.role === "family" || currentUser?.role === "veterinarian")) {
+      fetchLibreLinkStatus(currentPet.id);
+    }
+  }, [currentPet?.id, fetchLibreLinkStatus, currentUser?.role]);
+
+  const canManageLibreLink = currentUser?.role === "owner" || currentUser?.role === "admin" || isAdmin;
+
+  const handleConnectLibreLink = async () => {
+    if (!currentPet?.id) return;
+    if (!libreEmail.trim() || !librePassword) {
+      addToast({ message: "Ingresa email y contraseña de LibreLink", type: "warning" });
+      return;
+    }
+    const ok = await connectLibreLink(currentPet.id, libreEmail.trim(), librePassword);
+    if (ok) {
+      addToast({ message: "Sensor LibreLink conectado", type: "success" });
+      setShowLibreLinkForm(false);
+      setLibreEmail("");
+      setLibrePassword("");
+    } else {
+      addToast({ message: libreLinkError || "No se pudo conectar LibreLink", type: "error" });
+    }
+  };
+
+  const handleDisconnectLibreLink = async () => {
+    if (!currentPet?.id) return;
+    if (!confirm("¿Desconectar el sensor LibreLink?")) return;
+    const ok = await disconnectLibreLink(currentPet.id);
+    if (ok) {
+      addToast({ message: "Sensor LibreLink desconectado", type: "success" });
+    } else {
+      addToast({ message: libreLinkError || "No se pudo desconectar LibreLink", type: "error" });
+    }
+  };
 
   const [isEditingPet, setIsEditingPet] = useState(false);
   const [editPetName, setEditPetName] = useState("");
@@ -442,7 +492,7 @@ export default function SettingsPage({ onBack }: Props) {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Nacimiento</span>
-                  <span className="font-medium text-gray-800">{new Date(currentPet.dateOfBirth).toLocaleDateString("es-CL")}</span>
+                  <span className="font-medium text-gray-800">{formatDate(currentPet.dateOfBirth)}</span>
                 </div>
                 <div className="flex justify-between border-t border-gray-50 pt-2 text-xs">
                   <span className="text-gray-400 font-bold">LÍMITES DE ALERTA</span>
@@ -629,11 +679,11 @@ export default function SettingsPage({ onBack }: Props) {
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Activado</span>
-                <span className="font-medium text-gray-800">{new Date(sensor.activatedAt).toLocaleDateString("es-CL")}</span>
+                <span className="font-medium text-gray-800">{formatDate(sensor.activatedAt)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Expira</span>
-                <span className="font-medium text-gray-800">{new Date(sensor.expiresAt).toLocaleDateString("es-CL")}</span>
+                <span className="font-medium text-gray-800">{formatDate(sensor.expiresAt)}</span>
               </div>
             </div>
           ) : (
@@ -665,6 +715,160 @@ export default function SettingsPage({ onBack }: Props) {
                 </button>
               </div>
             </div>
+          )}
+        </div>
+
+        {/* LibreLink */}
+        <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="bg-blue-100 rounded-full p-2">
+              <Link2 size={20} className="text-blue-500" />
+            </div>
+            <h3 className="font-semibold text-gray-800">Sensor LibreLink</h3>
+            {currentPet && (
+              <button
+                onClick={() => fetchLibreLinkStatus(currentPet.id)}
+                disabled={libreLinkLoading}
+                className="ml-auto flex items-center gap-1 text-xs font-semibold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50"
+              >
+                <RefreshCw size={14} className={libreLinkLoading ? "animate-spin" : ""} /> Actualizar
+              </button>
+            )}
+          </div>
+
+          {!currentPet && (
+            <p className="text-sm text-gray-400 py-2 text-center">Selecciona una mascota para ver el estado del sensor</p>
+          )}
+
+          {currentPet && libreLinkStatus?.status === "error" && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-2 mb-3 flex items-start gap-2">
+              <AlertTriangle size={16} className="text-red-500 mt-0.5 flex-shrink-0" />
+              <span className="text-xs text-red-700">
+                Error de conexión con sensor: {libreLinkStatus.lastError || "verificar credenciales"}
+              </span>
+            </div>
+          )}
+
+          {currentPet && libreLinkStatus?.connected ? (
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Estado</span>
+                <span className="font-medium text-green-700">Conectado</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Email</span>
+                <span className="font-medium text-gray-800">{libreLinkStatus.email}</span>
+              </div>
+              {libreLinkStatus.lastReadingValue !== null && (
+                <>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Última lectura</span>
+                    <span className="font-medium text-gray-800">
+                      {libreLinkStatus.lastReadingValue} mg/dL
+                      {libreLinkStatus.lastReadingTrend ? ` (${libreLinkStatus.lastReadingTrend})` : ""}
+                    </span>
+                  </div>
+                  {libreLinkStatus.lastReadingAt && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Tomada</span>
+                      <span className="font-medium text-gray-800">{formatDateTime(libreLinkStatus.lastReadingAt)}</span>
+                    </div>
+                  )}
+                </>
+              )}
+              {libreLinkStatus.sensorExpiresAt && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Sensor expira</span>
+                  <span className="font-medium text-gray-800">{formatDateTime(libreLinkStatus.sensorExpiresAt)}</span>
+                </div>
+              )}
+              {libreLinkStatus.lastPollAt && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Última sincronización</span>
+                  <span className="font-medium text-gray-800">{formatDateTime(libreLinkStatus.lastPollAt)}</span>
+                </div>
+              )}
+              {libreLinkStatus.status === "error" && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Detalle error</span>
+                  <span className="font-medium text-red-700 text-right">{libreLinkStatus.lastError}</span>
+                </div>
+              )}
+              {canManageLibreLink && (
+                <button
+                  onClick={handleDisconnectLibreLink}
+                  disabled={libreLinkLoading}
+                  className="w-full bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white font-semibold py-2 rounded-lg text-sm transition-colors flex items-center justify-center gap-1 mt-2"
+                >
+                  <Unlink size={16} /> Desconectar sensor
+                </button>
+              )}
+              {!canManageLibreLink && (
+                <p className="text-xs text-gray-400 mt-2 text-center">
+                  Solo el dueño o admin puede desconectar el sensor
+                </p>
+              )}
+            </div>
+          ) : (
+            currentPet && (
+              <>
+                {libreLinkError && (
+                  <p className="text-xs text-red-500 mb-2">{libreLinkError}</p>
+                )}
+                {canManageLibreLink ? (
+                  <>
+                    {!showLibreLinkForm && (
+                      <button
+                        onClick={() => setShowLibreLinkForm(true)}
+                        className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 rounded-lg text-sm transition-colors flex items-center justify-center gap-1"
+                      >
+                        <Link2 size={16} /> Conectar sensor LibreLink
+                      </button>
+                    )}
+                    {showLibreLinkForm && (
+                      <div className="border-t border-gray-100 pt-3 mt-1 space-y-2">
+                        <p className="text-xs font-medium text-gray-500 mb-1">
+                          Ingresa las credenciales de tu cuenta LibreLink
+                        </p>
+                        <input
+                          type="email"
+                          value={libreEmail}
+                          onChange={(e) => setLibreEmail(e.target.value)}
+                          placeholder="email@librelink.com"
+                          className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        />
+                        <input
+                          type="password"
+                          value={librePassword}
+                          onChange={(e) => setLibrePassword(e.target.value)}
+                          placeholder="Contraseña LibreLink"
+                          className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            onClick={handleConnectLibreLink}
+                            disabled={libreLinkConnecting}
+                            className="flex-1 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-semibold py-2 rounded-lg text-sm transition-colors"
+                          >
+                            {libreLinkConnecting ? "Conectando..." : "Conectar"}
+                          </button>
+                          <button
+                            onClick={() => { setShowLibreLinkForm(false); setLibreEmail(""); setLibrePassword(""); }}
+                            className="px-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 rounded-lg text-sm"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-xs text-gray-400 text-center">
+                    Sensor no conectado. El dueño o admin debe conectar el sensor.
+                  </p>
+                )}
+              </>
+            )
           )}
         </div>
 

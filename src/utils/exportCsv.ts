@@ -2,6 +2,7 @@ import type { GlucoseReading } from "../types/glucose";
 import { type InsulinRecord } from "../types/insulin";
 import type { FoodRecord } from "../types/food";
 import type { MedicationLog } from "../types/medication";
+import { formatChile } from "./date";
 
 export interface ExportRow {
   fecha: string;
@@ -20,10 +21,9 @@ export function buildExportRows(
   const rows: ExportRow[] = [];
 
   glucose.forEach((r) => {
-    const d = new Date(r.timestamp);
     rows.push({
-      fecha: d.toLocaleDateString("es-CL"),
-      hora: d.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
+      fecha: formatChile(r.timestamp, "dd/MM/yyyy"),
+      hora: formatChile(r.timestamp, "HH:mm"),
       tipo: "Glucosa",
       valor: `${r.value} ${r.unit}`,
       cuidador: "Sensor",
@@ -31,10 +31,9 @@ export function buildExportRows(
   });
 
   insulin.forEach((r) => {
-    const d = new Date(r.timestamp);
     rows.push({
-      fecha: d.toLocaleDateString("es-CL"),
-      hora: d.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
+      fecha: formatChile(r.timestamp, "dd/MM/yyyy"),
+      hora: formatChile(r.timestamp, "HH:mm"),
       tipo: `Insulina (${r.insulinType})`,
       valor: `${r.units} U`,
       cuidador: r.caregiverName,
@@ -42,10 +41,9 @@ export function buildExportRows(
   });
 
   food.forEach((r) => {
-    const d = new Date(r.timestamp);
     rows.push({
-      fecha: d.toLocaleDateString("es-CL"),
-      hora: d.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
+      fecha: formatChile(r.timestamp, "dd/MM/yyyy"),
+      hora: formatChile(r.timestamp, "HH:mm"),
       tipo: `Comida (${r.foodType})`,
       valor: r.quantity,
       cuidador: r.caregiverName,
@@ -53,10 +51,9 @@ export function buildExportRows(
   });
 
   medLogs.forEach((r) => {
-    const d = new Date(r.givenAt);
     rows.push({
-      fecha: d.toLocaleDateString("es-CL"),
-      hora: d.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
+      fecha: formatChile(r.givenAt, "dd/MM/yyyy"),
+      hora: formatChile(r.givenAt, "HH:mm"),
       tipo: `Remedio (${r.medicationName})`,
       valor: r.scheduledTime,
       cuidador: r.caregiverName,

@@ -3,6 +3,7 @@ import { Syringe, Clock, UserCheck, Droplets } from "lucide-react";
 import { useRegistryStore } from "../../stores/registryStore";
 import { useAppStore } from "../../stores/appStore";
 import { getInsulinLabel } from "../../types/insulin";
+import { formatChile } from "../../utils/date";
 
 export default function InsulinForm() {
   const submitInsulin = useRegistryStore((s) => s.submitInsulin);
@@ -63,14 +64,15 @@ export default function InsulinForm() {
         notes: finalNotes,
       });
 
-      if (result.success) {
+      if (result?.success) {
         addToast({ message: "Dosis de insulina registrada", type: "success" });
         setUnits(0.3);
         setNotes("");
         setRecordGlucose(false);
       }
-    } catch (err) {
-      addToast({ message: "Error al registrar insulina", type: "error" });
+    } catch (err: any) {
+      const msg = err?.message || "Error al registrar insulina";
+      addToast({ message: msg, type: "error" });
     } finally {
       setSubmitting(false);
     }
@@ -95,7 +97,7 @@ export default function InsulinForm() {
           <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2.5">
             <Clock size={14} className="text-gray-500" />
             <span className="text-sm text-gray-700">
-              {new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })}
+              {formatChile(new Date(), "HH:mm")}
             </span>
             <span className="text-gray-400 text-xs">(automática)</span>
             <button
@@ -197,7 +199,7 @@ export default function InsulinForm() {
             </button>
             {useAutoGlucose && latestGlucose && (
               <span className="text-xs text-gray-400">
-                Última: {latestGlucose.value} mg/dL ({new Date(latestGlucose.timestamp).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })})
+                Última: {latestGlucose.value} mg/dL ({formatChile(latestGlucose.timestamp, "HH:mm")})
               </span>
             )}
           </div>

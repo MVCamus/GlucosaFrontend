@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Droplets, Clock, UserCheck } from "lucide-react";
 import { useRegistryStore } from "../../stores/registryStore";
 import { useAppStore } from "../../stores/appStore";
-import { getTodayStr } from "../../utils/date";
+import { getTodayStr, formatChile } from "../../utils/date";
 import type { GlucoseTrend } from "../../types/glucose";
 
 const TRENDS: { value: GlucoseTrend; label: string }[] = [
@@ -133,7 +133,7 @@ export default function GlucoseForm() {
           <label className="text-sm font-medium text-gray-600 block mb-1">Hora</label>
           <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2.5 text-sm text-gray-700">
             <Clock size={14} />
-            <span>{new Date().toLocaleDateString("es-CL")} {new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })}</span>
+            <span>{formatChile(new Date(), "dd/MM/yyyy HH:mm")}</span>
             <span className="text-gray-400">(automática)</span>
           </div>
         </div>

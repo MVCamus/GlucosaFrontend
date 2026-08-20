@@ -13,7 +13,7 @@ import {
 import { useGlucoseStore } from "../../stores/glucoseStore";
 import { useRegistryStore } from "../../stores/registryStore";
 import { formatReadingsForChart, getGlucoseZoneColor } from "../../utils/chart";
-import { getLocalDateStr } from "../../utils/date";
+import { getLocalDateStr, formatChile } from "../../utils/date";
 
 export default function GlucoseChart() {
   const dailySummary = useGlucoseStore((s) => s.dailySummary);
@@ -36,7 +36,7 @@ export default function GlucoseChart() {
     for (const r of insulinRecords) {
       if (getLocalDateStr(r.timestamp) !== selectedDate) continue;
       markers.push({
-        time: new Date(r.timestamp).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
+        time: formatChile(r.timestamp, "HH:mm"),
         timestamp: r.timestamp,
         type: "insulin",
         label: `${r.units}U`,
@@ -45,7 +45,7 @@ export default function GlucoseChart() {
     for (const r of foodRecords) {
       if (getLocalDateStr(r.timestamp) !== selectedDate) continue;
       markers.push({
-        time: new Date(r.timestamp).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
+        time: formatChile(r.timestamp, "HH:mm"),
         timestamp: r.timestamp,
         type: "food",
         label: r.foodType === "pellet" ? "Pellet" : r.foodType === "casera" ? "Casera" : "Mix",
@@ -116,7 +116,7 @@ export default function GlucoseChart() {
               A las {lastReading.time}
             </span>
             <span className="text-[10px] text-gray-400 mt-2 font-medium">
-              Día: {new Date(selectedDate + 'T00:00:00').toLocaleDateString("es-CL", { day: 'numeric', month: 'short' })}
+              Día: {formatChile(selectedDate + 'T00:00:00', "d MMM")}
             </span>
           </div>
         </div>

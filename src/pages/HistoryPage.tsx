@@ -3,6 +3,7 @@ import { useGlucoseStore } from "../stores/glucoseStore";
 import { CalendarDays } from "lucide-react";
 import { useRegistryStore } from "../stores/registryStore";
 import { getInsulinLabel } from "../types/insulin";
+import { formatDateTime } from "../utils/date";
 
 export default function HistoryPage() {
   const selectedDate = useGlucoseStore((s) => s.selectedDate);
@@ -36,7 +37,7 @@ export default function HistoryPage() {
               <div key={alert.id} className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm">
                 <p className="font-semibold text-red-700">⚠️ Alerta de doble dosis</p>
                 <p className="text-red-600 text-xs">
-                  {new Date(alert.timestamp).toLocaleString("es-CL")} — {alert.lastDose.units}U {getInsulinLabel(alert.lastDose.insulinType)} por {alert.lastDose.caregiverName}
+                  {formatDateTime(alert.timestamp)} — {alert.lastDose.units}U {getInsulinLabel(alert.lastDose.insulinType)} por {alert.lastDose.caregiverName}
                 </p>
                 <p className="text-red-500 text-xs mt-1">
                   Resolución: {alert.resolution === "cancelled" ? "Cancelada" : "Forzada"}

@@ -4,7 +4,7 @@ import { useAppStore } from "../../stores/appStore";
 import MedCheckButton from "./MedCheckButton";
 import type { MedicationWithSlots } from "../../utils/medSlots";
 import { getMinutesLate, formatMinutesLate, getMedicationWarning } from "../../utils/medSlots";
-import { getTodayStr } from "../../utils/date";
+import { getTodayStr, formatChile } from "../../utils/date";
 
 interface Props {
   group: MedicationWithSlots;
@@ -85,21 +85,27 @@ export default function MedicationCard({ group, isAllGiven, onEdit }: Props) {
           const minutesLate = slot.status === "overdue" ? getMinutesLate(slot.scheduledTime, today) : 0;
 
           const givenTime = slot.log
-            ? new Date(slot.log.givenAt).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })
+            ? formatChile(slot.log.givenAt, "HH:mm")
             : null;
 
           const delayInfo = (() => {
             if (!slot.log) return null;
-            const givenDate = new Date(slot.log.givenAt);
-            const [sh, sm] = slot.scheduledTime.split(":").map(Number);
-            const scheduledDate = new Date(givenDate);
-            scheduledDate.setHours(sh, sm, 0, 0);
-            const diffMin = Math.round((givenDate.getTime() - scheduledDate.getTime()) / 60000);
-            if (diffMin <= 0) return null;
+            // Hora en que se administró en zona Chile
+            const givenChileTime = formatChile(slot.log.givenAt, "HH:mm");
+            const [gh, gm] = givenChileTime.split(":").map(Number);
+            const givenMins = gh * 60 + gm;
+
+            const [sh, sm] = (slot.shiftedTime || slot.scheduledTime).split(":").map(Number);
+            const scheduledMins = sh * 60 + sm;
+
+            const diffMin = givenMins - scheduledMins;
+            // Ventana de cortesía: si se administró dentro de 45 min, no se considera tarde
+            if (diffMin <= 45) return null;
+
             if (diffMin < 60) return `(+${diffMin} min)`;
             const h = Math.floor(diffMin / 60);
             const m = diffMin % 60;
-            return m > 0 ? `(+${h}h ${m})` : `(+${h}h)`;
+            return m > 0 ? `(+${h}h ${m}m)` : `(+${h}h)`;
           })();
 
           return (
