@@ -4,7 +4,6 @@ import GlucoseChart from "../components/chart/GlucoseChart";
 import EventGlucoseSummary from "../components/dashboard/EventGlucoseSummary";
 import { useState } from "react";
 import SettingsPage from "./SettingsPage";
-import OnboardingTour from "../components/ui/OnboardingTour";
 
 export default function DashboardPage() {
   const [showSettings, setShowSettings] = useState(false);
@@ -19,7 +18,6 @@ export default function DashboardPage() {
       <SensorBanner />
       <GlucoseChart />
       <EventGlucoseSummary />
-      <OnboardingTour />
     </div>
   );
 }

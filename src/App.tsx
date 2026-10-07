@@ -5,6 +5,7 @@ import ToastContainer from "./components/ui/Toast";
 import ConnectivityBanner from "./components/ui/ConnectivityBanner";
 import InstallPrompt from "./components/ui/InstallPrompt";
 import NotificationPermissionBanner from "./components/ui/NotificationPermissionBanner";
+import OnboardingTour from "./components/ui/OnboardingTour";
 import DashboardPage from "./pages/DashboardPage";
 import RegisterPage from "./pages/RegisterPage";
 import MedicationsPage from "./pages/MedicationsPage";
@@ -110,6 +111,7 @@ export default function App() {
           </Routes>
         </div>
         <BottomNav />
+        <OnboardingTour />
         <ToastContainer />
       </div>
     </BrowserRouter>

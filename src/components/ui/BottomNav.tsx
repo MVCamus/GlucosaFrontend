@@ -27,6 +27,7 @@ export default function BottomNav() {
             return (
               <button
                 key={path}
+                id={`tour-nav-${path === "/" ? "inicio" : path.replace("/", "")}`}
                 onClick={() => navigate(path)}
                 className={`relative flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 ${
                   active ? "text-orange-500" : "text-gray-400 hover:text-gray-600"

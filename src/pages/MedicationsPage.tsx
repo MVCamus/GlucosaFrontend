@@ -37,9 +37,9 @@ export default function MedicationsPage() {
       </div>
 
       {pendingGroups.length === 0 ? (
-        <div className="text-center text-gray-400 py-8">No hay remedios pendientes</div>
+        <div id="tour-meds-pending" className="text-center text-gray-400 py-8">No hay remedios pendientes</div>
       ) : (
-        <div className="space-y-3">
+        <div id="tour-meds-pending" className="space-y-3">
           {pendingGroups.map((group: MedicationWithSlots) => (
             <MedicationCard
               key={group.medication.id}
@@ -51,8 +51,8 @@ export default function MedicationsPage() {
         </div>
       )}
 
-      {givenGroups.length > 0 && (
-        <>
+      {givenGroups.length > 0 ? (
+        <div id="tour-meds-given">
           <h2 className="text-lg font-bold text-gray-800 mt-6 mb-4">Dados hoy</h2>
           <div className="space-y-3">
             {givenGroups.map((group: MedicationWithSlots) => (
@@ -64,7 +64,9 @@ export default function MedicationsPage() {
               />
             ))}
           </div>
-        </>
+        </div>
+      ) : (
+        <div id="tour-meds-given" className="hidden" />
       )}
 
       {showForm && <MedicationForm onClose={() => { setShowForm(false); useMedicationStore.getState().closeForm(); }} />}

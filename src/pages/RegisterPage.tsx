@@ -10,10 +10,11 @@ export default function RegisterPage() {
   const [activeTab, setActiveTab] = useState<Tab>("glucose");
 
   return (
-    <div className="px-4 py-4">
+    <div id="tour-register-page" className="px-4 py-4">
       <CriticalAlertModal />
-      <div className="flex gap-2 mb-6">
+      <div id="tour-register-tabs" className="flex gap-2 mb-6">
         <button
+          id="tour-tab-glucose"
           onClick={() => setActiveTab("glucose")}
           className={`flex-1 py-2.5 rounded-xl font-semibold text-sm transition-colors ${
             activeTab === "glucose"
@@ -24,6 +25,7 @@ export default function RegisterPage() {
           🩸 Glucosa
         </button>
         <button
+          id="tour-tab-insulin"
           onClick={() => setActiveTab("insulin")}
           className={`flex-1 py-2.5 rounded-xl font-semibold text-sm transition-colors ${
             activeTab === "insulin"
@@ -34,6 +36,7 @@ export default function RegisterPage() {
           💉 Insulina
         </button>
         <button
+          id="tour-tab-food"
           onClick={() => setActiveTab("food")}
           className={`flex-1 py-2.5 rounded-xl font-semibold text-sm transition-colors ${
             activeTab === "food"
@@ -44,9 +47,11 @@ export default function RegisterPage() {
           🍖 Comida
         </button>
       </div>
-      {activeTab === "glucose" && <GlucoseForm />}
-      {activeTab === "insulin" && <InsulinForm />}
-      {activeTab === "food" && <FoodForm />}
+      <div id="tour-register-form-container">
+        {activeTab === "glucose" && <GlucoseForm />}
+        {activeTab === "insulin" && <InsulinForm />}
+        {activeTab === "food" && <FoodForm />}
+      </div>
     </div>
   );
 }
