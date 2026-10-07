@@ -27,7 +27,12 @@ export default function SensorBanner() {
     libreLinkStatus?.connected && libreLinkStatus.lastReadingValue !== null;
   const libreLinkError = libreLinkStatus?.status === "error";
 
-  if (!sensor && !showLibreLinkReading && !libreLinkError) {
+  // Si no hay sensor en sensorStatus pero libreLinkStatus nos reporta sensorExpiresAt, calculamos los días
+  const effectiveExpiresAt = sensor?.expiresAt || (libreLinkStatus?.sensorExpiresAt ?? null);
+  const effectiveDaysRemaining = effectiveExpiresAt ? daysRemaining(effectiveExpiresAt) : remaining;
+  const effectiveSensorModel = sensor?.sensorModel || 'FreeStyle Libre';
+
+  if (!sensor && !effectiveExpiresAt && !showLibreLinkReading && !libreLinkError) {
     return (
       <div id="tour-sensor-banner" className="bg-white border border-gray-100 rounded-xl p-3 mx-4 mb-3 shadow-sm flex items-center gap-2">
         <Activity size={16} className="text-gray-400" />
@@ -36,50 +41,27 @@ export default function SensorBanner() {
     );
   }
 
-  if (libreLinkError && !sensor) {
+  if (libreLinkError && !sensor && !effectiveExpiresAt) {
     return (
       <div id="tour-sensor-banner" className="bg-red-50 border border-red-200 rounded-xl p-3 mx-4 mb-3 shadow-sm flex items-center gap-2">
         <AlertTriangle size={16} className="text-red-500" />
-        <span className="text-sm font-semibold text-red-700">Error de conexión con sensor LibreLink</span>
-      </div>
-    );
-  }
-
-  if (showLibreLinkReading && !sensor) {
-    return (
-      <div id="tour-sensor-banner" className="bg-white border border-gray-100 rounded-xl p-3 mx-4 mb-3 shadow-sm">
-        <div className="flex items-center gap-2 mb-1">
-          <Activity size={16} className="text-blue-500" />
-          <span className="text-sm font-semibold text-gray-700">Última lectura LibreLink</span>
-        </div>
-        <div className="flex items-baseline gap-2">
-          <span className="text-2xl font-bold text-gray-800">
-            {libreLinkStatus!.lastReadingValue} <span className="text-sm font-medium text-gray-500">mg/dL</span>
-          </span>
-          {libreLinkStatus!.lastReadingTrend && (
-            <span className="text-xs text-gray-500">({libreLinkStatus!.lastReadingTrend})</span>
-          )}
-          {libreLinkStatus!.lastReadingAt && (
-            <span className="text-xs text-gray-400 ml-auto">{formatTime(libreLinkStatus!.lastReadingAt)}</span>
-          )}
-        </div>
+        <span className="text-sm font-semibold text-red-700">Error de conexión con LibreLinkUp</span>
       </div>
     );
   }
 
   const totalDays = 14;
-  const percentage = Math.min(100, (remaining / totalDays) * 100);
-  const barColor = remaining > 3 ? "bg-green-500" : remaining > 1 ? "bg-amber-500" : "bg-red-500";
-  const textColor = remaining > 3 ? "text-green-700" : remaining > 1 ? "text-amber-700" : "text-red-700";
-  const statusText = remaining > 0 ? `${remaining} días restantes` : "Sensor caducado — reemplazar ahora";
-  const activeSensor = sensor!;
+  const percentage = Math.min(100, (effectiveDaysRemaining / totalDays) * 100);
+  const barColor = effectiveDaysRemaining > 3 ? "bg-green-500" : effectiveDaysRemaining > 1 ? "bg-amber-500" : "bg-red-500";
+  const textColor = effectiveDaysRemaining > 3 ? "text-green-700" : effectiveDaysRemaining > 1 ? "text-amber-700" : "text-red-700";
+  const statusText = effectiveDaysRemaining > 0 ? `${effectiveDaysRemaining} días restantes` : "Sensor caducado — reemplazar ahora";
 
   return (
     <div id="tour-sensor-banner" className="bg-white border border-gray-100 rounded-xl p-3 mx-4 mb-3 shadow-sm">
       <div className="flex items-center gap-2 mb-2">
         <Activity size={16} className="text-orange-500" />
         <span className="text-sm font-semibold text-gray-700">Sensor activo</span>
-        <span className="text-xs text-gray-400 ml-auto">{activeSensor.sensorModel}</span>
+        <span className="text-xs text-gray-400 ml-auto">{effectiveSensorModel}</span>
       </div>
       <div className="flex items-center gap-3">
         <div className="flex-1">

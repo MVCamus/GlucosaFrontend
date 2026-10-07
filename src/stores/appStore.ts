@@ -52,6 +52,7 @@ interface AppState {
   adminLogin: (password: string) => Promise<boolean>;
   changeAdminPassword: (newPass: string) => void;
   registerNewSensor: (model: string, serial: string) => Promise<void>;
+  refreshSensorStatus: (petId?: string) => Promise<void>;
   addPet: (pet: Omit<DogProfile, "id">) => Promise<DogProfile | null>;
   updatePet: (id: string, changes: Partial<DogProfile>) => Promise<void>;
   loadPets: () => Promise<void>;
@@ -462,6 +463,33 @@ export const useAppStore = create<AppState>()(
         } catch (error) {
           console.error("Failed to register sensor on backend:", error);
           get().addToast({ message: "Error al registrar el sensor en el servidor", type: "error" });
+        }
+      },
+
+      refreshSensorStatus: async (petId?: string) => {
+        const targetPetId = petId || get().currentPet?.id;
+        if (!targetPetId) return;
+        try {
+          const { apiRequest } = await import("../utils/api");
+          const sensor = await apiRequest(`/pets/${targetPetId}/sensors/current`);
+          if (sensor) {
+            set({
+              sensorStatus: {
+                id: sensor.id,
+                activatedAt: sensor.activatedAt,
+                expiresAt: sensor.expiresAt,
+                sensorModel: sensor.sensorModel,
+                serialNumber: sensor.serialNumber,
+                status: sensor.status,
+                daysRemaining: Math.max(0, Math.ceil((new Date(sensor.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+              }
+            });
+          } else {
+            set({ sensorStatus: null });
+          }
+        } catch (sensorErr) {
+          console.warn("No active sensor found for pet:", sensorErr);
+          set({ sensorStatus: null });
         }
       },
 

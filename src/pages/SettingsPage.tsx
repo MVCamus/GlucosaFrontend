@@ -20,6 +20,7 @@ export default function SettingsPage({ onBack }: Props) {
 
   const sensor = useAppStore((s) => s.sensorStatus);
   const registerNewSensor = useAppStore((s) => s.registerNewSensor);
+  const refreshSensorStatus = useAppStore((s) => s.refreshSensorStatus);
   
   const customInsulinTypes = useAppStore((s) => s.customInsulinTypes);
   const addCustomInsulinType = useAppStore((s) => s.addCustomInsulinType);
@@ -85,10 +86,11 @@ export default function SettingsPage({ onBack }: Props) {
     }
     const ok = await connectLibreLink(currentPet.id, libreEmail.trim(), librePassword);
     if (ok) {
-      addToast({ message: "Sensor LibreLink conectado", type: "success" });
+      addToast({ message: "Cuenta LibreLinkUp conectada correctamente", type: "success" });
       setShowLibreLinkForm(false);
       setLibreEmail("");
       setLibrePassword("");
+      await refreshSensorStatus(currentPet.id);
     } else {
       addToast({ message: libreLinkError || "No se pudo conectar LibreLink", type: "error" });
     }
@@ -96,10 +98,11 @@ export default function SettingsPage({ onBack }: Props) {
 
   const handleDisconnectLibreLink = async () => {
     if (!currentPet?.id) return;
-    if (!confirm("¿Desconectar el sensor LibreLink?")) return;
+    if (!confirm("¿Desconectar la cuenta LibreLinkUp de esta mascota?")) return;
     const ok = await disconnectLibreLink(currentPet.id);
     if (ok) {
-      addToast({ message: "Sensor LibreLink desconectado", type: "success" });
+      addToast({ message: "Cuenta LibreLinkUp desconectada", type: "success" });
+      await refreshSensorStatus(currentPet.id);
     } else {
       addToast({ message: libreLinkError || "No se pudo desconectar LibreLink", type: "error" });
     }
@@ -720,11 +723,14 @@ export default function SettingsPage({ onBack }: Props) {
 
         {/* LibreLink */}
         <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
-          <div className="flex items-center gap-3 mb-3">
+          <div className="flex items-center gap-3 mb-2">
             <div className="bg-blue-100 rounded-full p-2">
               <Link2 size={20} className="text-blue-500" />
             </div>
-            <h3 className="font-semibold text-gray-800">Sensor LibreLink</h3>
+            <div>
+              <h3 className="font-semibold text-gray-800">Cuenta LibreLinkUp (Abbott)</h3>
+              <p className="text-xs text-gray-500">Credenciales del tutor para sincronización automática</p>
+            </div>
             {currentPet && (
               <button
                 onClick={() => fetchLibreLinkStatus(currentPet.id)}
@@ -736,15 +742,19 @@ export default function SettingsPage({ onBack }: Props) {
             )}
           </div>
 
+          <p className="text-xs text-gray-400 mb-3 bg-gray-50 rounded-lg p-2.5">
+            Solo el dueño necesita conectar su cuenta de LibreLinkUp una vez. El servidor consultará a Abbott cada 5 minutos y todos los cuidadores de esta mascota recibirán las lecturas automáticamente.
+          </p>
+
           {!currentPet && (
-            <p className="text-sm text-gray-400 py-2 text-center">Selecciona una mascota para ver el estado del sensor</p>
+            <p className="text-sm text-gray-400 py-2 text-center">Selecciona una mascota para ver el estado de la cuenta</p>
           )}
 
           {currentPet && libreLinkStatus?.status === "error" && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-2 mb-3 flex items-start gap-2">
               <AlertTriangle size={16} className="text-red-500 mt-0.5 flex-shrink-0" />
               <span className="text-xs text-red-700">
-                Error de conexión con sensor: {libreLinkStatus.lastError || "verificar credenciales"}
+                Error de conexión con Abbott: {libreLinkStatus.lastError || "verificar credenciales"}
               </span>
             </div>
           )}
@@ -753,16 +763,16 @@ export default function SettingsPage({ onBack }: Props) {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-gray-500">Estado</span>
-                <span className="font-medium text-green-700">Conectado</span>
+                <span className="font-medium text-green-700">Conectado a Abbott</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">Email</span>
+                <span className="text-gray-500">Email Abbott</span>
                 <span className="font-medium text-gray-800">{libreLinkStatus.email}</span>
               </div>
               {libreLinkStatus.lastReadingValue !== null && (
                 <>
                   <div className="flex justify-between">
-                    <span className="text-gray-500">Última lectura</span>
+                    <span className="text-gray-500">Última lectura Abbott</span>
                     <span className="font-medium text-gray-800">
                       {libreLinkStatus.lastReadingValue} mg/dL
                       {libreLinkStatus.lastReadingTrend ? ` (${libreLinkStatus.lastReadingTrend})` : ""}
@@ -784,7 +794,7 @@ export default function SettingsPage({ onBack }: Props) {
               )}
               {libreLinkStatus.lastPollAt && (
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Última sincronización</span>
+                  <span className="text-gray-500">Última consulta</span>
                   <span className="font-medium text-gray-800">{formatDateTime(libreLinkStatus.lastPollAt)}</span>
                 </div>
               )}
@@ -800,12 +810,12 @@ export default function SettingsPage({ onBack }: Props) {
                   disabled={libreLinkLoading}
                   className="w-full bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white font-semibold py-2 rounded-lg text-sm transition-colors flex items-center justify-center gap-1 mt-2"
                 >
-                  <Unlink size={16} /> Desconectar sensor
+                  <Unlink size={16} /> Desconectar cuenta LibreLinkUp
                 </button>
               )}
               {!canManageLibreLink && (
                 <p className="text-xs text-gray-400 mt-2 text-center">
-                  Solo el dueño o admin puede desconectar el sensor
+                  Solo el dueño o admin puede desconectar la cuenta
                 </p>
               )}
             </div>
@@ -822,13 +832,13 @@ export default function SettingsPage({ onBack }: Props) {
                         onClick={() => setShowLibreLinkForm(true)}
                         className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 rounded-lg text-sm transition-colors flex items-center justify-center gap-1"
                       >
-                        <Link2 size={16} /> Conectar sensor LibreLink
+                        <Link2 size={16} /> Conectar cuenta LibreLinkUp
                       </button>
                     )}
                     {showLibreLinkForm && (
                       <div className="border-t border-gray-100 pt-3 mt-1 space-y-2">
                         <p className="text-xs font-medium text-gray-500 mb-1">
-                          Ingresa las credenciales de tu cuenta LibreLink
+                          Ingresa las credenciales de tu cuenta de Abbott / LibreLinkUp
                         </p>
                         <input
                           type="email"
@@ -841,7 +851,7 @@ export default function SettingsPage({ onBack }: Props) {
                           type="password"
                           value={librePassword}
                           onChange={(e) => setLibrePassword(e.target.value)}
-                          placeholder="Contraseña LibreLink"
+                          placeholder="Contraseña LibreLinkUp"
                           className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                         />
                         <div className="flex gap-2">
@@ -850,7 +860,7 @@ export default function SettingsPage({ onBack }: Props) {
                             disabled={libreLinkConnecting}
                             className="flex-1 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-semibold py-2 rounded-lg text-sm transition-colors"
                           >
-                            {libreLinkConnecting ? "Conectando..." : "Conectar"}
+                            {libreLinkConnecting ? "Conectando..." : "Conectar cuenta"}
                           </button>
                           <button
                             onClick={() => { setShowLibreLinkForm(false); setLibreEmail(""); setLibrePassword(""); }}
@@ -864,7 +874,7 @@ export default function SettingsPage({ onBack }: Props) {
                   </>
                 ) : (
                   <p className="text-xs text-gray-400 text-center">
-                    Sensor no conectado. El dueño o admin debe conectar el sensor.
+                    Cuenta no conectada. El dueño o admin debe conectar las credenciales.
                   </p>
                 )}
               </>
