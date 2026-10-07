@@ -657,8 +657,6 @@ export const useAppStore = create<AppState>()(
               } catch (glucoseErr) {
                 console.warn("Failed to load glucose readings:", glucoseErr);
               }
-
-              localStorage.removeItem(`last_sync_time_${targetPetId}`);
             } else {
               const petsList = await apiRequest("/pets").catch(() => []);
               if (petsList.length > 0) {
@@ -724,8 +722,6 @@ export const useAppStore = create<AppState>()(
                 } catch (glucoseErr) {
                   console.warn("Failed to load glucose readings:", glucoseErr);
                 }
-
-                localStorage.removeItem(`last_sync_time_${targetPetId}`);
               } else {
                 set({ currentPet: null, sensorStatus: null });
               }

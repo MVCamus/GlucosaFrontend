@@ -11,7 +11,7 @@ import { getTodayStr } from '../utils/date';
 // (causa del error EMAXCONNSESSION reportado por el backend).
 let syncInProgress = false;
 let syncQueuePending = false;
-const SYNC_INTERVAL_MS = 5000;
+const SYNC_INTERVAL_MS = 30000; // 30 segundos (en lugar de 5s para evitar flood de egress y saturación del pooler)
 const SYNC_DEBOUNCE_MS = 500; // Retraso antes de lanzar sync — primero cargar UI
 const DEFAULT_SINCE_HOURS = 24; // Default: 24h atrás (NO 1970)
 
@@ -266,8 +266,8 @@ export function useSync() {
           useMedicationStore.getState().addServerMedicationLogs(mappedLogs);
         }
 
-        // Guardar la marca de tiempo ACTUAL como nuevo lastSyncAt para la próxima vez
-        setLastSyncForPet(petId!, new Date().toISOString());
+        // Guardar la marca de tiempo oficial del servidor (evita desincronización y clock drift)
+        setLastSyncForPet(petId!, response.serverTime || new Date().toISOString());
       }
     } catch (error) {
       console.error('Error durante la sincronización:', error);
