@@ -20,7 +20,7 @@ export default function InsulinForm() {
     return sorted[0];
   }, [glucoseRecords]);
 
-  const [units, setUnits] = useState(0.3);
+  const [units, setUnits] = useState(1);
   const [insulinType, setInsulinType] = useState("insulatard");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -66,7 +66,7 @@ export default function InsulinForm() {
 
       if (result?.success) {
         addToast({ message: "Dosis de insulina registrada", type: "success" });
-        setUnits(0.3);
+        setUnits(1);
         setNotes("");
         setRecordGlucose(false);
       }
@@ -130,19 +130,19 @@ export default function InsulinForm() {
       <div>
         <label className="text-sm font-medium text-gray-600 block mb-1">Unidades (U)</label>
         <div className="flex items-center gap-3">
-          <button type="button" onClick={() => setUnits(Math.round(Math.max(0.1, units - 0.1) * 10) / 10)} className="w-10 h-10 rounded-lg bg-gray-100 text-gray-600 font-bold text-lg hover:bg-gray-200 transition-colors">-</button>
+          <button type="button" onClick={() => setUnits(Math.max(1, units - 1))} className="w-10 h-10 rounded-lg bg-gray-100 text-gray-600 font-bold text-lg hover:bg-gray-200 transition-colors">-</button>
           <input
             type="number"
             value={units}
-            onChange={(e) => setUnits(Number(e.target.value))}
-            step={0.1}
-            min={0.1}
-            max={20}
+            onChange={(e) => setUnits(Math.max(1, Math.min(30, Math.round(Number(e.target.value)) || 1)))}
+            step={1}
+            min={1}
+            max={30}
             className="flex-1 text-center text-xl font-bold py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400"
           />
-          <button type="button" onClick={() => setUnits(Math.round(Math.min(20, units + 0.1) * 10) / 10)} className="w-10 h-10 rounded-lg bg-gray-100 text-gray-600 font-bold text-lg hover:bg-gray-200 transition-colors">+</button>
+          <button type="button" onClick={() => setUnits(Math.min(30, units + 1))} className="w-10 h-10 rounded-lg bg-gray-100 text-gray-600 font-bold text-lg hover:bg-gray-200 transition-colors">+</button>
         </div>
-        <p className="text-xs text-gray-400 mt-1">Rango: 0.1 — 20 U</p>
+        <p className="text-xs text-gray-400 mt-1">Rango: 1 — 30 U</p>
       </div>
 
       <div>
