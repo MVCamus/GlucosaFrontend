@@ -5,6 +5,34 @@ import { getShiftedTimeForSlot } from "../utils/medSlots";
 import { useAppStore } from "./appStore";
 import { getLocalDateStr, getTodayStr } from "../utils/date";
 
+function normalizeIncomingMedications(
+  meds: Medication[],
+  petId: string
+): Medication[] {
+  return meds.map((med) => ({
+    ...med,
+    petId: med.petId || petId,
+    synced: true,
+  }));
+}
+
+function mergeMedication(
+  local: Medication,
+  server: Medication | undefined,
+  petId: string
+): Medication {
+  if (!server) {
+    return local.petId ? local : { ...local, petId };
+  }
+
+  return {
+    ...local,
+    ...server,
+    petId: server.petId || local.petId || petId,
+    synced: true,
+  };
+}
+
 interface MedicationState {
   medications: Medication[];
   logs: MedicationLog[];
@@ -20,7 +48,8 @@ interface MedicationState {
   getLogsForDate: (date: string) => MedicationLog[];
   openForm: (medication?: Medication) => void;
   closeForm: () => void;
-  addServerMedications: (meds: Medication[]) => void;
+  upsertServerMedications: (meds: Medication[], petId: string) => void;
+  reconcileMedications: (meds: Medication[], petId: string) => void;
   addServerMedicationLogs: (logs: MedicationLog[]) => void;
   getUnsyncedMedications: () => Medication[];
   getUnsyncedLogs: () => MedicationLog[];
@@ -36,15 +65,16 @@ export const useMedicationStore = create<MedicationState>()(
 
       addMedication: async (med) => {
         const tempId = crypto.randomUUID();
+        const petId = useAppStore.getState().currentPet?.id;
         const newMed: Medication = {
           ...med,
           id: tempId,
+          petId,
           createdAt: new Date().toISOString(),
           synced: false,
         };
         set((state) => ({ medications: [...state.medications, newMed] }));
 
-        const petId = useAppStore.getState().currentPet?.id;
         if (petId && localStorage.getItem('jwt_token')) {
           try {
             const { apiRequest } = await import("../utils/api");
@@ -194,7 +224,9 @@ export const useMedicationStore = create<MedicationState>()(
 
       getDailySlots: (date) => {
         const state = get();
+        const currentPetId = useAppStore.getState().currentPet?.id;
         const activeMeds = state.medications.filter((m) => {
+          if (currentPetId && m.petId && m.petId !== currentPetId) return false;
           if (!m.active) return false;
           if (m.startDate && date < m.startDate) return false;
           if (m.endDate && date > m.endDate) return false;
@@ -256,14 +288,63 @@ export const useMedicationStore = create<MedicationState>()(
         set({ isFormOpen: false, editingMedication: null });
       },
 
-      addServerMedications: (meds) => {
+      upsertServerMedications: (meds, petId) => {
         set((state) => {
-          const existingIds = new Set(state.medications.map((m) => m.id));
-          const newMeds = meds.filter((m) => !existingIds.has(m.id));
-          if (newMeds.length === 0) return {};
-          return {
-            medications: [...state.medications, ...newMeds],
-          };
+          const incoming = normalizeIncomingMedications(meds, petId);
+          const incomingById = new Map(incoming.map((m) => [m.id, m]));
+
+          const merged = state.medications.map((local) =>
+            mergeMedication(local, incomingById.get(local.id), petId)
+          );
+
+          const existingIds = new Set(merged.map((m) => m.id));
+          for (const med of incoming) {
+            if (!existingIds.has(med.id)) merged.push(med);
+          }
+
+          return { medications: merged };
+        });
+      },
+
+      /**
+       * Reconciliación completa contra el servidor.
+       * - Actualiza los medicamentos existentes (incluido `active`/`endDate`).
+       * - Elimina los medicamentos sincronizados que ya no existen en el servidor.
+       * - Conserva los medicamentos locales que aún no se han sincronizado.
+       */
+      reconcileMedications: (meds, petId) => {
+        set((state) => {
+          const incoming = normalizeIncomingMedications(meds, petId);
+          const incomingById = new Map(incoming.map((m) => [m.id, m]));
+
+          const kept: Medication[] = [];
+          for (const local of state.medications) {
+            const belongsToPet = !local.petId || local.petId === petId;
+
+            if (!belongsToPet) {
+              kept.push(local);
+              continue;
+            }
+
+            const server = incomingById.get(local.id);
+            if (server) {
+              kept.push(mergeMedication(local, server, petId));
+              continue;
+            }
+
+            // Medicamento creado offline: no debe perderse.
+            if (local.synced === false) {
+              kept.push({ ...local, petId: local.petId || petId });
+            }
+            // Si estaba sincronizado y el servidor ya no lo devuelve, se elimina.
+          }
+
+          const keptIds = new Set(kept.map((m) => m.id));
+          for (const med of incoming) {
+            if (!keptIds.has(med.id)) kept.push(med);
+          }
+
+          return { medications: kept };
         });
       },
 
@@ -279,7 +360,12 @@ export const useMedicationStore = create<MedicationState>()(
       },
 
       getUnsyncedMedications: () => {
-        return get().medications.filter((m) => m.synced === false);
+        const petId = useAppStore.getState().currentPet?.id;
+        return get().medications.filter(
+          (m) =>
+            m.synced === false &&
+            (!petId || !m.petId || m.petId === petId)
+        );
       },
 
       getUnsyncedLogs: () => {

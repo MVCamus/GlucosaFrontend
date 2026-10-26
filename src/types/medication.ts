@@ -1,5 +1,6 @@
 export interface Medication {
   id: string;
+  petId?: string;
   name: string;
   dose: string;
   frequency: MedFrequency;

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { useMedicationStore } from "../stores/medicationStore";
+import { useAppStore } from "../stores/appStore";
 import MedProgressBar from "../components/medications/MedProgressBar";
 import MedOverdueAlert from "../components/medications/MedOverdueAlert";
 import MedicationCard from "../components/medications/MedicationCard";
@@ -13,9 +14,13 @@ export default function MedicationsPage() {
   const medications = useMedicationStore((s: any) => s.medications);
   const logs = useMedicationStore((s: any) => s.logs);
   const openForm = useMedicationStore((s: any) => s.openForm);
+  const currentPet = useAppStore((s) => s.currentPet);
 
   const today = getTodayStr();
-  const slots = computeDailySlots(medications, logs, today);
+  const petMedications = medications.filter(
+    (m: any) => !currentPet?.id || !m.petId || m.petId === currentPet.id
+  );
+  const slots = computeDailySlots(petMedications, logs, today);
   const grouped = groupSlotsByMedication(slots);
 
   const pendingGroups = grouped.filter((g: MedicationWithSlots) => g.slots.some((s: any) => s.status !== "given"));

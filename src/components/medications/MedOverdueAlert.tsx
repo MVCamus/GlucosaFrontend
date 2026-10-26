@@ -1,18 +1,23 @@
 import { useMemo } from "react";
 import { AlertTriangle } from "lucide-react";
 import { useMedicationStore } from "../../stores/medicationStore";
+import { useAppStore } from "../../stores/appStore";
 import { computeDailySlots } from "../../utils/medSlots";
 import { getTodayStr } from "../../utils/date";
 
 export default function MedOverdueAlert() {
   const medications = useMedicationStore((s: any) => s.medications);
   const logs = useMedicationStore((s: any) => s.logs);
+  const currentPet = useAppStore((s) => s.currentPet);
 
   const overdueSlots = useMemo(() => {
     const today = getTodayStr();
-    const slots = computeDailySlots(medications, logs, today);
+    const petMedications = medications.filter(
+      (m: any) => !currentPet?.id || !m.petId || m.petId === currentPet.id
+    );
+    const slots = computeDailySlots(petMedications, logs, today);
     return slots.filter((s) => s.status === "overdue");
-  }, [medications, logs]);
+  }, [medications, logs, currentPet]);
 
   if (overdueSlots.length === 0) return null;
 

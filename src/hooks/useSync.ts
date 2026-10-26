@@ -6,6 +6,7 @@ import { useMedicationStore } from '../stores/medicationStore';
 import { useGlucoseStore } from '../stores/glucoseStore';
 import { apiRequest } from '../utils/api';
 import { getTodayStr } from '../utils/date';
+import { mapServerMedication } from '../utils/medicationMapping';
 
 // Lock singleton a nivel de módulo: evita llamadas múltiples a /sync/pull en paralelo
 // (causa del error EMAXCONNSESSION reportado por el backend).
@@ -14,6 +15,7 @@ let syncQueuePending = false;
 const SYNC_INTERVAL_MS = 30000; // 30 segundos (en lugar de 5s para evitar flood de egress y saturación del pooler)
 const SYNC_DEBOUNCE_MS = 500; // Retraso antes de lanzar sync — primero cargar UI
 const DEFAULT_SINCE_HOURS = 24; // Default: 24h atrás (NO 1970)
+const MED_RECONCILE_INTERVAL_MS = 5 * 60 * 1000; // Reconciliación completa de remedios cada 5 min
 
 function getDefaultSince(): string {
   return new Date(Date.now() - DEFAULT_SINCE_HOURS * 60 * 60 * 1000).toISOString();
@@ -34,6 +36,27 @@ export function useSync() {
   const currentPetId = useAppStore((s) => s.currentPet?.id);
   const isAdminLoggedIn = useAppStore((s) => s.isAdminLoggedIn);
   const [syncing, setSyncing] = useState(false);
+  const lastMedReconcileRef = useRef(0);
+
+  /**
+   * Trae la lista completa (incluidos inactivos) para eliminar del store
+   * medicamentos que fueron borrados en otro dispositivo.
+   */
+  const reconcileMedicationList = useCallback(async (petId: string) => {
+    try {
+      const response = await apiRequest(
+        `/pets/${petId}/medications?includeInactive=true`
+      );
+      if (Array.isArray(response)) {
+        const mapped = response.map((m: any) =>
+          mapServerMedication(m, petId)
+        );
+        useMedicationStore.getState().reconcileMedications(mapped, petId);
+      }
+    } catch (error) {
+      console.warn('Failed to reconcile medications:', error);
+    }
+  }, []);
 
   const pushPendingData = async (petId: string) => {
     const registryStore = useRegistryStore.getState();
@@ -102,6 +125,7 @@ export function useSync() {
         active: m.active,
         isStrict: m.isStrict,
         startDate: m.startDate,
+        endDate: m.endDate,
         clientId: m.id,
       }));
     }
@@ -237,20 +261,12 @@ export function useSync() {
         }
 
         if (medications && medications.length > 0) {
-          const mappedMeds = medications.map((m: any) => ({
-            id: m.id,
-            name: m.name,
-            dose: m.dose,
-            frequency: m.frequency,
-            scheduledTimes: m.scheduledTimes,
-            notifyMinutesBefore: m.notifyMinutesBefore,
-            active: m.active,
-            isStrict: m.isStrict ?? false,
-            createdAt: m.createdAt || new Date().toISOString(),
-            startDate: m.startDate ? m.startDate.split('T')[0] : new Date().toISOString().split('T')[0],
-            endDate: m.endDate ? m.endDate.split('T')[0] : undefined,
-          }));
-          useMedicationStore.getState().addServerMedications(mappedMeds);
+          const mappedMeds = medications.map((m: any) =>
+            mapServerMedication(m, petId!)
+          );
+          useMedicationStore
+            .getState()
+            .upsertServerMedications(mappedMeds, petId!);
         }
 
         if (medicationLogs && medicationLogs.length > 0) {
@@ -268,6 +284,14 @@ export function useSync() {
 
         // Guardar la marca de tiempo oficial del servidor (evita desincronización y clock drift)
         setLastSyncForPet(petId!, response.serverTime || new Date().toISOString());
+
+        if (
+          Date.now() - lastMedReconcileRef.current >=
+          MED_RECONCILE_INTERVAL_MS
+        ) {
+          lastMedReconcileRef.current = Date.now();
+          await reconcileMedicationList(petId!);
+        }
       }
     } catch (error) {
       console.error('Error durante la sincronización:', error);
@@ -281,14 +305,15 @@ export function useSync() {
         setTimeout(() => { syncData(); }, SYNC_DEBOUNCE_MS);
       }
     }
-  }, [isOnline, currentPetId]);
+  }, [isOnline, currentPetId, reconcileMedicationList]);
 
   const syncNow = useCallback(() => {
-    // Forzar pull completo: usar default 24h atrás (no 1970)
+    // Forzar pull completo y reconciliación de remedios
     const petId = currentPetId;
     if (petId) {
       localStorage.setItem(`last_sync_time_${petId}`, getDefaultSince());
     }
+    lastMedReconcileRef.current = 0;
     syncData();
   }, [syncData, currentPetId]);
 
@@ -311,6 +336,7 @@ export function useSync() {
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
         // Re-sync al volver a la app, con debounce
+        lastMedReconcileRef.current = 0;
         setTimeout(() => syncData(), 100);
         useGlucoseStore.getState().loadDay(getTodayStr());
       }

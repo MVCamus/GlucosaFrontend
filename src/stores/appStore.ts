@@ -7,6 +7,7 @@ import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import { PushNotifications } from "@capacitor/push-notifications";
 import { getTodayStr } from "../utils/date";
+import { mapServerMedication } from "../utils/medicationMapping";
 
 interface Toast {
   id: string;
@@ -643,23 +644,17 @@ export const useAppStore = create<AppState>()(
               }
 
               try {
-                const response = await apiRequest(`/pets/${targetPetId}/medications`);
+                const response = await apiRequest(
+                  `/pets/${targetPetId}/medications?includeInactive=true`
+                );
                 if (response && Array.isArray(response)) {
-                  const mappedMeds = response.map((m: any) => ({
-                    id: m.id,
-                    name: m.name,
-                    dose: m.dose,
-                    frequency: m.frequency,
-                    scheduledTimes: m.scheduledTimes,
-                    notifyMinutesBefore: m.notifyMinutesBefore,
-                    active: m.active,
-                    isStrict: m.isStrict ?? false,
-                    createdAt: m.createdAt || new Date().toISOString(),
-                    startDate: m.startDate ? m.startDate.split('T')[0] : getTodayStr(),
-                    endDate: m.endDate ? m.endDate.split('T')[0] : undefined,
-                  }));
+                  const mappedMeds = response.map((m: any) =>
+                    mapServerMedication(m, targetPetId!)
+                  );
                   const { useMedicationStore } = await import("./medicationStore");
-                  useMedicationStore.getState().addServerMedications(mappedMeds);
+                  useMedicationStore
+                    .getState()
+                    .reconcileMedications(mappedMeds, targetPetId!);
                 }
               } catch (medErr) {
                 console.warn("Failed to load medications:", medErr);
@@ -708,23 +703,17 @@ export const useAppStore = create<AppState>()(
                 }
 
                 try {
-                  const response = await apiRequest(`/pets/${targetPetId}/medications`);
+                  const response = await apiRequest(
+                    `/pets/${targetPetId}/medications?includeInactive=true`
+                  );
                   if (response && Array.isArray(response)) {
-                    const mappedMeds = response.map((m: any) => ({
-                      id: m.id,
-                      name: m.name,
-                      dose: m.dose,
-                      frequency: m.frequency,
-                      scheduledTimes: m.scheduledTimes,
-                      notifyMinutesBefore: m.notifyMinutesBefore,
-                      active: m.active,
-                      isStrict: m.isStrict ?? false,
-                      createdAt: m.createdAt || new Date().toISOString(),
-                      startDate: m.startDate ? m.startDate.split('T')[0] : getTodayStr(),
-                      endDate: m.endDate ? m.endDate.split('T')[0] : undefined,
-                    }));
+                    const mappedMeds = response.map((m: any) =>
+                      mapServerMedication(m, targetPetId!)
+                    );
                     const { useMedicationStore } = await import("./medicationStore");
-                    useMedicationStore.getState().addServerMedications(mappedMeds);
+                    useMedicationStore
+                      .getState()
+                      .reconcileMedications(mappedMeds, targetPetId!);
                   }
                 } catch (medErr) {
                   console.warn("Failed to load medications:", medErr);
